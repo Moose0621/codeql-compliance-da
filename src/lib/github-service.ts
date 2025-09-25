@@ -1,101 +1,164 @@
-import { Octokit } from '@octokit/core';
-import type { Repository, WorkflowRun, CodeQLAlert, SecurityFindings } from '@/types/dashboard';
+import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert } from '@/types/dashboard';
+
+interface GitHubConfig {
+  token: string;
+  organization: string;
+}
 
 export class GitHubService {
-  private octokit: Octokit;
+  private config: GitHubConfig;
+  private baseUrl = 'https://api.github.com';
 
-  constructor(token?: string) {
-    this.octokit = new Octokit({
-      auth: token || process.env.GITHUB_TOKEN
-    });
+  constructor(config: GitHubConfig) {
+    this.config = config;
   }
 
-  async getRepositories(org: string = 'octodemo'): Promise<Repository[]> {
-    try {
-      const { data: repos } = await this.octokit.request('GET /orgs/{org}/repos', {
-        org,
-        per_page: 100,
-        sort: 'updated',
-        direction: 'desc'
-      });
+  private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers: {
+        'Authorization': `token ${this.config.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...options.headers,
+      },
+    });
 
-      const repositories: Repository[] = [];
+    if (!response.ok) {
+      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+    }
 
-      for (const repo of repos) {
-        const hasCodeQLWorkflow = await this.checkCodeQLWorkflow(repo.owner.login, repo.name);
-        
-        if (hasCodeQLWorkflow) {
-          const lastScan = await this.getLastScanInfo(repo.owner.login, repo.name);
-          const securityFindings = await this.getSecurityFindings(repo.owner.login, repo.name);
+    return response.json();
+  }
 
-          repositories.push({
+  async getOrganizationRepositories(page = 1, perPage = 30): Promise<Repository[]> {
+    const repos = await this.makeRequest<any[]>(
+      `/orgs/${this.config.organization}/repos?page=${page}&per_page=${perPage}&sort=updated&direction=desc`
+    );
+
+    const repositoriesWithWorkflows = await Promise.all(
+      repos.map(async (repo) => {
+        try {
+          // Check for CodeQL workflows
+          const workflows = await this.getWorkflows(repo.name);
+          const hasCodeQLWorkflow = workflows.some((workflow: any) => 
+            workflow.name.toLowerCase().includes('codeql') || 
+            workflow.path.includes('codeql')
+          );
+
+          // Get latest workflow runs for CodeQL
+          let lastScanDate: string | undefined;
+          let lastScanStatus: 'success' | 'failure' | 'in_progress' | 'pending' = 'pending';
+
+          if (hasCodeQLWorkflow) {
+            const runs = await this.getWorkflowRuns(repo.name, 'codeql');
+            if (runs.length > 0) {
+              const latestRun = runs[0];
+              lastScanDate = latestRun.updated_at;
+              lastScanStatus = this.mapWorkflowStatus(latestRun.status, latestRun.conclusion);
+            }
+          }
+
+          // Get security findings
+          const securityFindings = await this.getSecurityFindings(repo.name);
+
+          return {
             id: repo.id,
             name: repo.name,
             full_name: repo.full_name,
             owner: {
               login: repo.owner.login,
-              avatar_url: repo.owner.avatar_url
+              avatar_url: repo.owner.avatar_url,
             },
-            has_codeql_workflow: true,
-            workflow_dispatch_enabled: true,
-            default_branch: repo.default_branch || 'main',
-            last_scan_date: lastScan?.created_at || undefined,
-            last_scan_status: (lastScan?.conclusion === 'success' ? 'success' : 
-                            lastScan?.conclusion === 'failure' ? 'failure' :
-                            lastScan?.status === 'in_progress' ? 'in_progress' : 'pending') as 'success' | 'failure' | 'in_progress' | 'pending',
-            security_findings: securityFindings
-          });
+            has_codeql_workflow: hasCodeQLWorkflow,
+            workflow_dispatch_enabled: hasCodeQLWorkflow, // Assume workflow dispatch is enabled if CodeQL exists
+            default_branch: repo.default_branch,
+            last_scan_date: lastScanDate,
+            last_scan_status: lastScanStatus,
+            security_findings: securityFindings,
+          } as Repository;
+        } catch (error) {
+          console.warn(`Failed to fetch workflow info for ${repo.name}:`, error);
+          return {
+            id: repo.id,
+            name: repo.name,
+            full_name: repo.full_name,
+            owner: {
+              login: repo.owner.login,
+              avatar_url: repo.owner.avatar_url,
+            },
+            has_codeql_workflow: false,
+            workflow_dispatch_enabled: false,
+            default_branch: repo.default_branch,
+            last_scan_date: undefined,
+            last_scan_status: 'pending',
+            security_findings: {
+              critical: 0,
+              high: 0,
+              medium: 0,
+              low: 0,
+              note: 0,
+              total: 0,
+            },
+          } as Repository;
         }
-      }
+      })
+    );
 
-      return repositories;
+    return repositoriesWithWorkflows;
+  }
+
+  async getWorkflows(repoName: string): Promise<any[]> {
+    try {
+      const response = await this.makeRequest<{ workflows: any[] }>(
+        `/repos/${this.config.organization}/${repoName}/actions/workflows`
+      );
+      return response.workflows;
     } catch (error) {
-      console.error('Error fetching repositories:', error);
+      console.warn(`Failed to fetch workflows for ${repoName}:`, error);
       return [];
     }
   }
 
-  private async checkCodeQLWorkflow(owner: string, repo: string): Promise<boolean> {
+  async getWorkflowRuns(repoName: string, workflowName?: string, page = 1, perPage = 5): Promise<WorkflowRun[]> {
     try {
-      const { data: workflows } = await this.octokit.request('GET /repos/{owner}/{repo}/actions/workflows', {
-        owner,
-        repo
-      });
+      let endpoint = `/repos/${this.config.organization}/${repoName}/actions/runs?page=${page}&per_page=${perPage}`;
+      
+      if (workflowName) {
+        endpoint += `&event=schedule,workflow_dispatch,push`;
+      }
 
-      return workflows.workflows.some(workflow => 
-        workflow.name.toLowerCase().includes('codeql') ||
-        workflow.path.includes('codeql')
+      const response = await this.makeRequest<{ workflow_runs: any[] }>(endpoint);
+      
+      let runs = response.workflow_runs;
+      
+      // Filter for CodeQL runs if specified
+      if (workflowName === 'codeql') {
+        runs = runs.filter((run: any) => 
+          run.name?.toLowerCase().includes('codeql') ||
+          run.path?.includes('codeql')
+        );
+      }
+
+      return runs.map((run: any) => ({
+        id: run.id,
+        status: run.status,
+        conclusion: run.conclusion,
+        created_at: run.created_at,
+        updated_at: run.updated_at,
+        html_url: run.html_url,
+      }));
+    } catch (error) {
+      console.warn(`Failed to fetch workflow runs for ${repoName}:`, error);
+      return [];
+    }
+  }
+
+  async getSecurityFindings(repoName: string): Promise<SecurityFindings> {
+    try {
+      const alerts = await this.makeRequest<CodeQLAlert[]>(
+        `/repos/${this.config.organization}/${repoName}/code-scanning/alerts?state=open&per_page=100`
       );
-    } catch (error) {
-      console.error(`Error checking CodeQL workflow for ${owner}/${repo}:`, error);
-      return false;
-    }
-  }
-
-  private async getLastScanInfo(owner: string, repo: string): Promise<WorkflowRun | null> {
-    try {
-      const { data: runs } = await this.octokit.request('GET /repos/{owner}/{repo}/actions/runs', {
-        owner,
-        repo,
-        per_page: 1,
-        event: 'workflow_dispatch'
-      });
-
-      return runs.workflow_runs[0] || null;
-    } catch (error) {
-      console.error(`Error fetching workflow runs for ${owner}/${repo}:`, error);
-      return null;
-    }
-  }
-
-  private async getSecurityFindings(owner: string, repo: string): Promise<SecurityFindings> {
-    try {
-      const { data: alerts } = await this.octokit.request('GET /repos/{owner}/{repo}/code-scanning/alerts', {
-        owner,
-        repo,
-        state: 'open',
-        per_page: 100
-      });
 
       const findings: SecurityFindings = {
         critical: 0,
@@ -103,14 +166,11 @@ export class GitHubService {
         medium: 0,
         low: 0,
         note: 0,
-        total: alerts.length
+        total: alerts.length,
       };
 
-      alerts.forEach((alert: any) => {
-        const severity = alert.rule?.security_severity_level || 
-                        (alert.rule?.severity === 'error' ? 'high' : 
-                         alert.rule?.severity === 'warning' ? 'medium' : 'low');
-        
+      alerts.forEach((alert) => {
+        const severity = alert.rule.security_severity_level || this.mapRuleSeverity(alert.rule.severity);
         switch (severity) {
           case 'critical':
             findings.critical++;
@@ -126,36 +186,101 @@ export class GitHubService {
             break;
           default:
             findings.note++;
+            break;
         }
       });
 
       return findings;
     } catch (error) {
-      console.error(`Error fetching security findings for ${owner}/${repo}:`, error);
+      // If we can't access code scanning alerts (maybe no alerts exist or insufficient permissions)
+      console.warn(`Failed to fetch security findings for ${repoName}:`, error);
       return {
         critical: 0,
         high: 0,
         medium: 0,
         low: 0,
         note: 0,
-        total: 0
+        total: 0,
       };
     }
   }
 
-  async dispatchWorkflow(owner: string, repo: string, workflowId: string = 'codeql.yml'): Promise<boolean> {
-    try {
-      await this.octokit.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
-        owner,
-        repo,
-        workflow_id: workflowId,
-        ref: 'main'
-      });
+  async dispatchWorkflow(repoName: string, workflowId: string | number, ref: string = 'main'): Promise<void> {
+    await this.makeRequest(
+      `/repos/${this.config.organization}/${repoName}/actions/workflows/${workflowId}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ref: ref,
+          inputs: {},
+        }),
+      }
+    );
+  }
 
-      return true;
+  async findCodeQLWorkflow(repoName: string): Promise<number | null> {
+    try {
+      const workflows = await this.getWorkflows(repoName);
+      const codeqlWorkflow = workflows.find((workflow) =>
+        workflow.name.toLowerCase().includes('codeql') ||
+        workflow.path.includes('codeql')
+      );
+      return codeqlWorkflow ? codeqlWorkflow.id : null;
     } catch (error) {
-      console.error(`Error dispatching workflow for ${owner}/${repo}:`, error);
-      return false;
+      console.error(`Failed to find CodeQL workflow for ${repoName}:`, error);
+      return null;
     }
   }
+
+  async dispatchCodeQLScan(repoName: string, ref: string = 'main'): Promise<void> {
+    const workflowId = await this.findCodeQLWorkflow(repoName);
+    if (!workflowId) {
+      throw new Error(`No CodeQL workflow found for repository ${repoName}`);
+    }
+    
+    await this.dispatchWorkflow(repoName, workflowId, ref);
+  }
+
+  async getUserInfo(): Promise<any> {
+    return this.makeRequest('/user');
+  }
+
+  async getOrganizationInfo(): Promise<any> {
+    return this.makeRequest(`/orgs/${this.config.organization}`);
+  }
+
+  private mapWorkflowStatus(status: string | null, conclusion: string | null): 'success' | 'failure' | 'in_progress' | 'pending' {
+    if (status === 'in_progress' || status === 'queued') {
+      return 'in_progress';
+    }
+    
+    if (conclusion === 'success') {
+      return 'success';
+    }
+    
+    if (conclusion === 'failure' || conclusion === 'cancelled' || conclusion === 'timed_out') {
+      return 'failure';
+    }
+    
+    return 'pending';
+  }
+
+  private mapRuleSeverity(severity: string): 'critical' | 'high' | 'medium' | 'low' | 'note' {
+    switch (severity.toLowerCase()) {
+      case 'error':
+        return 'high';
+      case 'warning':
+        return 'medium';
+      case 'note':
+      default:
+        return 'note';
+    }
+  }
+}
+
+export function createGitHubService(token: string, organization: string): GitHubService {
+  return new GitHubService({ token, organization });
 }

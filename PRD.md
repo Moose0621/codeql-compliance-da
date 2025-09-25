@@ -1,6 +1,6 @@
 # Enterprise CodeQL Security Dashboard
 
-A comprehensive security compliance dashboard for managing and monitoring CodeQL workflow dispatches across enterprise repositories to meet FedRAMP audit requirements with on-demand scanning capabilities.
+A comprehensive security compliance dashboard for managing and monitoring CodeQL workflow dispatches across enterprise repositories to meet FedRAMP audit requirements with on-demand scanning capabilities and GitHub organization integration.
 
 **Experience Qualities**: 
 1. **Professional** - Clean, authoritative interface that conveys enterprise security standards
@@ -11,43 +11,54 @@ A comprehensive security compliance dashboard for managing and monitoring CodeQL
 - Integrates with GitHub APIs for repository management and CodeQL workflow dispatch
 - Requires sophisticated state management for scan results and audit trails
 - Multi-level data visualization with real-time status monitoring
+- GitHub organization authentication and permission management
 
 ## Essential Features
 
+### GitHub Organization Integration
+- **Functionality**: Connect to GitHub organizations with Personal Access Token authentication
+- **Purpose**: Enable real-time repository management and CodeQL workflow dispatch
+- **Trigger**: Initial setup and configuration management
+- **Progression**: Enter GitHub token → Verify organization access → Test API permissions → Establish connection → Load repositories
+- **Success criteria**: Successful authentication and repository list populated from live GitHub data
+
 ### Repository Management
-- **Functionality**: Display repositories configured with advanced CodeQL workflow dispatch
+- **Functionality**: Display repositories from connected GitHub organization with CodeQL workflow detection
 - **Purpose**: Provide visibility into scan-ready repositories for compliance auditing
-- **Trigger**: Dashboard load and manual refresh
-- **Progression**: Load dashboard → Fetch GitHub repos → Filter CodeQL-enabled → Display in sortable table
-- **Success criteria**: All repositories with workflow_dispatch CodeQL workflows are listed with status indicators
+- **Trigger**: GitHub connection established and manual refresh
+- **Progression**: Load dashboard → Fetch GitHub repos via API → Detect CodeQL workflows → Display with real-time status
+- **Success criteria**: All repositories with workflow_dispatch CodeQL workflows are listed with current scan status
 
 ### On-Demand Scan Dispatch
-- **Functionality**: Trigger CodeQL scans via workflow dispatch with 2-3 minute SLA
+- **Functionality**: Trigger live CodeQL scans via GitHub workflow dispatch API with real-time status tracking
 - **Purpose**: Meet FedRAMP requirements for immediate security scanning capability
-- **Trigger**: Click "Request Scan" button on repository row
-- **Progression**: Select repo → Confirm scan request → API call to GitHub → Show progress indicator → Update scan status
-- **Success criteria**: Workflow dispatch successfully triggers and status updates within expected timeframe
+- **Trigger**: Click "Request Scan" button on repository card
+- **Progression**: Select repo → Confirm scan request → GitHub API workflow dispatch → Track progress → Update scan results
+- **Success criteria**: GitHub workflow successfully triggered and results automatically updated in dashboard
 
 ### Scan Results Visualization
-- **Functionality**: Display latest CodeQL results with security findings breakdown
-- **Purpose**: Provide immediate visibility into security posture for audit documentation
-- **Trigger**: Repository selection or automatic refresh
-- **Progression**: Select repository → Fetch latest CodeQL results → Parse findings → Display categorized results chart
-- **Success criteria**: Security findings are accurately categorized and visually represented
+- **Functionality**: Display live CodeQL security alerts and findings from GitHub Code Scanning API
+- **Purpose**: Provide immediate visibility into current security posture for audit documentation
+- **Trigger**: Repository connection or scan completion
+- **Progression**: Connect to repo → Fetch live CodeQL alerts → Parse security severity levels → Display categorized chart
+- **Success criteria**: Real security findings accurately categorized and displayed from GitHub's Code Scanning alerts
 
 ### Audit Trail Dashboard
-- **Functionality**: Historical view of all scan requests and completion times
-- **Purpose**: Maintain compliance documentation for FedRAMP auditing
+- **Functionality**: Historical view of all scan dispatch requests with GitHub workflow tracking
+- **Purpose**: Maintain compliance documentation for FedRAMP auditing with real workflow data
 - **Trigger**: Navigate to audit tab
-- **Progression**: Access audit view → Load historical scan data → Display timeline with filters
-- **Success criteria**: Complete audit trail with timestamps meets FedRAMP documentation requirements
+- **Progression**: Access audit view → Load historical scan requests → Cross-reference with GitHub workflow runs → Display timeline
+- **Success criteria**: Complete audit trail with GitHub workflow correlation meets FedRAMP documentation requirements
 
 ## Edge Case Handling
-- **API Rate Limiting**: Implement retry logic with exponential backoff for GitHub API calls
-- **Workflow Failures**: Display clear error states when CodeQL workflows fail to dispatch
-- **Missing Permissions**: Graceful handling when user lacks repository access with clear messaging
-- **Network Timeouts**: Offline indicators and cached data display for unreliable connections
-- **Large Repository Sets**: Pagination and virtual scrolling for enterprises with 100+ repositories
+- **API Rate Limiting**: Implement retry logic with exponential backoff for GitHub API calls with proper error handling
+- **Invalid GitHub Tokens**: Clear error messaging when tokens are expired or have insufficient permissions
+- **Workflow Failures**: Display clear error states when CodeQL workflows fail to dispatch with GitHub error details
+- **Missing Permissions**: Graceful handling when user lacks repository or security_events access with permission guidance
+- **Organization Access**: Handle cases where user cannot access specified organization with clear messaging
+- **Network Timeouts**: Offline indicators and connection retry logic for unreliable GitHub API access
+- **Large Repository Sets**: Pagination and loading states for enterprises with 100+ repositories
+- **Workflow Detection**: Handle repositories without CodeQL workflows or workflow_dispatch capability
 
 ## Design Direction
 The design should feel authoritative and enterprise-grade, conveying security and compliance professionalism. Clean, structured interface with generous whitespace and clear information hierarchy that builds trust in critical security data.
