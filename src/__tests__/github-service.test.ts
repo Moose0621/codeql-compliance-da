@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { GitHubService } from '@/lib/github-service';
+import { GitHubService, createGitHubService } from '@/lib/github-service';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Helper to build mock fetch responses
@@ -123,5 +123,12 @@ describe('GitHubService caching & error handling', () => {
     }));
     const svc = new GitHubService({ token: 't', organization: 'org' });
     await expect(svc.getUserInfo()).rejects.toThrow(/403/);
+  });
+});
+
+describe('GitHubService factory', () => {
+  it('creates service instance with provided config', () => {
+    const service = createGitHubService('test-token', 'test-org');
+    expect(service).toBeInstanceOf(GitHubService);
   });
 });

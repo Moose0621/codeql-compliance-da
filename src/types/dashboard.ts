@@ -80,3 +80,57 @@ export interface ComplianceReport {
 }
 
 export type ExportFormat = 'pdf' | 'csv' | 'json' | 'xlsx';
+
+// GitHub API response interfaces
+export interface Workflow {
+  id: number;
+  name?: string;
+  path?: string;
+  state?: string;
+}
+
+export interface GitHubRepository {
+  id: number;
+  name: string;
+  full_name: string;
+  owner: {
+    login: string;
+    avatar_url: string;
+  };
+  default_branch: string;
+}
+
+export interface GitHubUser {
+  login: string;
+  id: number;
+  avatar_url: string;
+  name?: string;
+  email?: string;
+}
+
+export interface GitHubOrganization {
+  login: string;
+  id: number;
+  avatar_url: string;
+  name?: string;
+  description?: string;
+}
+
+export interface WorkflowsResponse {
+  workflows: Workflow[];
+}
+
+export interface WorkflowRunsResponse {
+  workflow_runs: WorkflowRunData[];
+}
+
+export interface WorkflowRunData {
+  id: number;
+  name?: string;
+  path?: string;
+  status: string | null;
+  conclusion: string | null;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+}

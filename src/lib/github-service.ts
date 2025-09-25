@@ -1,4 +1,16 @@
-import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert } from '@/types/dashboard';
+import type { 
+  Repository, 
+  SecurityFindings, 
+  WorkflowRun, 
+  CodeQLAlert,
+  Workflow,
+  GitHubRepository,
+  GitHubUser,
+  GitHubOrganization,
+  WorkflowsResponse,
+  WorkflowRunsResponse,
+  WorkflowRunData
+} from '@/types/dashboard';
 /**
  * Architectural scalability notes (incremental implementation):
  * 1. Centralized rate limit tracking & adaptive backoff to prevent hard 403s.
@@ -22,7 +34,7 @@ interface RateLimitState {
   lastUpdated: number | null; // ms
 }
 
-type CacheEntry = { data: any; fetchedAt: number; ttl: number };
+type CacheEntry<T = unknown> = { data: T; fetchedAt: number; ttl: number };
 
 export class GitHubService {
   private config: GitHubConfig;
@@ -91,7 +103,7 @@ export class GitHubService {
     return entry.data as T;
   }
 
-  private writeCache(key: string, data: any, ttl = GitHubService.DEFAULT_TTL) {
+  private writeCache<T>(key: string, data: T, ttl = GitHubService.DEFAULT_TTL) {
     GitHubService.memoryCache.set(key, { data, fetchedAt: Date.now(), ttl });
   }
 
@@ -99,7 +111,7 @@ export class GitHubService {
     const method = (options.method || 'GET').toUpperCase();
     const isCacheable = method === 'GET' && cacheTTL !== 0;
     const key = this.cacheKey(endpoint);
-    const disableCache = (globalThis as any).__DISABLE_GITHUB_CACHE__ === true;
+    const disableCache = (globalThis as { __DISABLE_GITHUB_CACHE__?: boolean }).__DISABLE_GITHUB_CACHE__ === true;
     if (isCacheable && !disableCache) {
       const cached = this.readCache<T>(key);
       if (cached) return cached;
@@ -120,9 +132,9 @@ export class GitHubService {
       });
 
       // Update rate limit state when headers present
-  const remaining = (response as any).headers?.get?.('X-RateLimit-Remaining');
-  const limit = (response as any).headers?.get?.('X-RateLimit-Limit');
-  const reset = (response as any).headers?.get?.('X-RateLimit-Reset');
+      const remaining = response.headers?.get('X-RateLimit-Remaining');
+      const limit = response.headers?.get('X-RateLimit-Limit');
+      const reset = response.headers?.get('X-RateLimit-Reset');
       if (remaining && limit && reset) {
         GitHubService.rateLimit = {
           remaining: Number(remaining),
@@ -177,7 +189,7 @@ export class GitHubService {
 
   async getOrganizationRepositories(page = 1, perPage = 30): Promise<Repository[]> {
     try {
-      const repos = await this.makeRequest<any[]>(
+      const repos = await this.makeRequest<GitHubRepository[]>(
         `/orgs/${this.config.organization}/repos?page=${page}&per_page=${perPage}&sort=updated&direction=desc`,
         {},
         { cacheTTL: 30_000 }
@@ -197,8 +209,8 @@ export class GitHubService {
           try {
             // Workflows (cached briefly)
             const workflows = await this.getWorkflows(repo.name);
-            const hasCodeQLWorkflow = workflows.some((workflow: any) =>
-              workflow.name.toLowerCase().includes('codeql') || workflow.path.includes('codeql')
+            const hasCodeQLWorkflow = workflows.some((workflow: Workflow) =>
+              workflow.name?.toLowerCase().includes('codeql') || workflow.path?.includes('codeql')
             );
 
             let lastScanDate: string | undefined;
@@ -254,9 +266,9 @@ export class GitHubService {
     }
   }
 
-  async getWorkflows(repoName: string): Promise<any[]> {
+  async getWorkflows(repoName: string): Promise<Workflow[]> {
     try {
-      const response = await this.makeRequest<{ workflows: any[] }>(
+      const response = await this.makeRequest<WorkflowsResponse>(
         `/repos/${this.config.organization}/${repoName}/actions/workflows`,
         {},
         { cacheTTL: 60_000 }
@@ -276,13 +288,13 @@ export class GitHubService {
         endpoint += `&event=schedule,workflow_dispatch,push`;
       }
 
-      const response = await this.makeRequest<{ workflow_runs: any[] }>(endpoint, {}, { cacheTTL: 15_000 });
+      const response = await this.makeRequest<WorkflowRunsResponse>(endpoint, {}, { cacheTTL: 15_000 });
       
       let runs = response.workflow_runs;
       
       // Filter for CodeQL runs if specified
       if (workflowName === 'codeql') {
-        runs = runs.filter((run: any) => 
+        runs = runs.filter((run: WorkflowRunData) => 
           run.name?.toLowerCase().includes('codeql') ||
           run.path?.includes('codeql')
         );
@@ -375,8 +387,8 @@ export class GitHubService {
     try {
       const workflows = await this.getWorkflows(repoName);
       const codeqlWorkflow = workflows.find((workflow) =>
-        workflow.name.toLowerCase().includes('codeql') ||
-        workflow.path.includes('codeql')
+        workflow.name?.toLowerCase().includes('codeql') ||
+        workflow.path?.includes('codeql')
       );
       return codeqlWorkflow ? codeqlWorkflow.id : null;
     } catch (error) {
@@ -394,12 +406,12 @@ export class GitHubService {
     await this.dispatchWorkflow(repoName, workflowId, ref);
   }
 
-  async getUserInfo(): Promise<any> {
-    return this.makeRequest('/user', {}, { cacheTTL: 300_000 });
+  async getUserInfo(): Promise<GitHubUser> {
+    return this.makeRequest<GitHubUser>('/user', {}, { cacheTTL: 300_000 });
   }
 
-  async getOrganizationInfo(): Promise<any> {
-    return this.makeRequest(`/orgs/${this.config.organization}`, {}, { cacheTTL: 300_000 });
+  async getOrganizationInfo(): Promise<GitHubOrganization> {
+    return this.makeRequest<GitHubOrganization>(`/orgs/${this.config.organization}`, {}, { cacheTTL: 300_000 });
   }
 
   private mapWorkflowStatus(status: string | null, conclusion: string | null): 'success' | 'failure' | 'in_progress' | 'pending' {
