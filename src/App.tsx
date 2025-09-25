@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,9 @@ import { ExportStatus } from "@/components/ExportStatus";
 import { GitHubConnection } from "@/components/GitHubConnection";
 import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { useKV } from '@github/spark/hooks';
+// Replaced Spark KV with localStorage persistence
+import { usePersistentConfig } from '@/hooks/usePersistentConfig';
+import { getEnvConfig } from '@/lib/env-config';
 import { createGitHubService } from '@/lib/github-service';
 import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/types/dashboard";
 
@@ -32,28 +34,30 @@ interface GitHubConfig {
 
 function App() {
   const [repositories, setRepositories] = useState<Repository[]>([]);
-  const [githubConfig, setGithubConfig] = useKV<GitHubConfig>("github-config", {
-    token: "",
-    organization: "",
-    isConnected: false
+  const env = getEnvConfig();
+  const envManaged = !!(env.token && env.org);
+  const [githubConfig, setGithubConfig] = usePersistentConfig<GitHubConfig>("github-config", {
+    token: env.token || "",
+    organization: env.org || "",
+    isConnected: envManaged,
+    lastVerified: envManaged ? new Date().toISOString() : undefined
   });
-  const [scanRequests, setScanRequests] = useKV<ScanRequest[]>("scan-requests", []);
-  const [exportHistory, setExportHistory] = useKV<Array<{id: string, format: ExportFormat, timestamp: string}>>("export-history", []);
+  const [scanRequests, setScanRequests] = usePersistentConfig<ScanRequest[]>("scan-requests", []);
+  const [exportHistory, setExportHistory] = usePersistentConfig<Array<{id: string, format: ExportFormat, timestamp: string}>>("export-history", []);
   const [isLoading, setIsLoading] = useState(false);
   const [scanningRepos, setScanningRepos] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState("setup");
 
-  // Load repositories when GitHub connection is established
+  // Load repositories when GitHub connection is established or restored
   useEffect(() => {
     if (githubConfig?.isConnected && githubConfig?.token && githubConfig?.organization) {
-      setActiveTab("repositories");
-      fetchRepositories();
+      setActiveTab(prev => (prev === 'setup' ? 'repositories' : prev));
+      if (repositories.length === 0) fetchRepositories();
     } else {
       setRepositories([]);
-      if (!githubConfig?.isConnected) {
-        setActiveTab("setup");
-      }
+      if (!githubConfig?.isConnected) setActiveTab('setup');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [githubConfig?.isConnected, githubConfig?.token, githubConfig?.organization]);
 
   const fetchRepositories = async (showToast = true) => {
@@ -238,12 +242,13 @@ function App() {
     return { totalRepos, activeScans, totalFindings, criticalFindings };
   };
 
-  const stats = getOverallStats();
+  const stats = useMemo(getOverallStats, [repositories]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 opacity-40 [background:radial-gradient(circle_at_30%_20%,hsl(var(--primary)/0.25),transparent_60%),radial-gradient(circle_at_70%_80%,hsl(var(--accent)/0.2),transparent_55%)] dark:opacity-30" />
       <Toaster position="top-right" />
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 relative">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -251,13 +256,13 @@ function App() {
               <Shield size={24} className="text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">CodeQL Security Dashboard</h1>
+              <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-primary/60 animate-[pulse_8s_ease-in-out_infinite]">CodeQL Security Dashboard</h1>
               <p className="text-muted-foreground">
                 Enterprise FedRAMP Compliance Monitoring
                 {githubConfig?.isConnected ? (
                   <span className="ml-2 flex items-center gap-1 text-green-600">
                     <CheckCircle size={16} />
-                    Connected to <strong>{githubConfig.organization}</strong>
+                    Connected to <strong>{githubConfig.organization}</strong>{envManaged && <span className="ml-1 text-xs rounded bg-green-100 px-2 py-0.5 text-green-700 border border-green-300">env</span>}
                   </span>
                 ) : (
                   <span className="ml-2 text-orange-600">
@@ -290,7 +295,7 @@ function App() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
+          <Card className="backdrop-blur supports-[backdrop-filter]:bg-background/70 border-border/60 hover:border-primary/30 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Repositories</CardTitle>
               <FileText size={16} className="text-muted-foreground" />
@@ -301,7 +306,7 @@ function App() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="backdrop-blur supports-[backdrop-filter]:bg-background/70 border-border/60 hover:border-primary/30 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Active Scans</CardTitle>
               <Activity size={16} className="text-muted-foreground" />
@@ -312,7 +317,7 @@ function App() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="backdrop-blur supports-[backdrop-filter]:bg-background/70 border-border/60 hover:border-primary/30 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Findings</CardTitle>
               <Warning size={16} className="text-muted-foreground" />
@@ -323,7 +328,7 @@ function App() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="backdrop-blur supports-[backdrop-filter]:bg-background/70 border-border/60 hover:border-primary/30 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Critical Issues</CardTitle>
               <Shield size={16} className="text-muted-foreground" />
@@ -390,15 +395,24 @@ function App() {
                 </CardContent>
               </Card>
             ) : isLoading ? (
-              <Card>
-                <CardContent className="text-center py-8">
-                  <ArrowClockwise size={48} className="mx-auto mb-4 text-muted-foreground animate-spin" />
-                  <h3 className="text-lg font-medium mb-2">Loading Repositories</h3>
-                  <p className="text-muted-foreground">
-                    Fetching repositories from {githubConfig.organization}...
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="animate-pulse rounded-xl border p-6 space-y-4 bg-card/50">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-muted" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-1/2 bg-muted rounded" />
+                        <div className="h-3 w-2/3 bg-muted rounded" />
+                      </div>
+                    </div>
+                    <div className="h-3 w-full bg-muted rounded" />
+                    <div className="flex gap-2">
+                      <div className="h-9 w-full bg-muted rounded" />
+                      <div className="h-9 w-24 bg-muted rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {repositories.map(repository => (
