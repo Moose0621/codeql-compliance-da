@@ -13,13 +13,15 @@ interface RepositoryCardProps {
   onDispatchScan: (repo: Repository) => void;
   onViewDetails: (repo: Repository) => void;
   isScanning?: boolean;
+  scanHistory?: Array<{ timestamp: string; findingsTotal?: number }>;
 }
 
 export function RepositoryCard({ 
   repository, 
   onDispatchScan, 
   onViewDetails, 
-  isScanning = false 
+  isScanning = false,
+  scanHistory = []
 }: RepositoryCardProps) {
   const handleDispatchScan = () => {
     onDispatchScan(repository);
@@ -34,8 +36,17 @@ export function RepositoryCard({
     return `${formatDistanceToNow(new Date(repository.last_scan_date))} ago`;
   };
 
+  // Build sparkline path from scanHistory totals
+  const sparkPoints = scanHistory.slice(-8).map(s => s.findingsTotal ?? 0);
+  const maxVal = Math.max(1, ...sparkPoints);
+  const sparkPath = sparkPoints.map((v,i)=>{
+    const x = (i/(Math.max(1,sparkPoints.length-1)))*80;
+    const y = 24 - (v/maxVal)*24;
+    return `${i===0?'M':'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
   return (
-    <Card className="transition-all duration-200 hover:shadow-lg border-border">
+    <Card className="transition-colors duration-300 hover:shadow-lg border-border group">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -67,6 +78,15 @@ export function RepositoryCard({
           <SecurityBadge findings={repository.security_findings} />
         )}
 
+        {sparkPoints.length > 1 && (
+          <div className="pt-1">
+            <svg viewBox="0 0 80 24" width="80" height="24" className="overflow-visible">
+              <path d={sparkPath} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+            </svg>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Findings trend</p>
+          </div>
+        )}
+
         <div className="flex gap-2 pt-2">
           <Button
             onClick={handleDispatchScan}
@@ -80,7 +100,7 @@ export function RepositoryCard({
           <Button
             variant="outline"
             onClick={handleViewDetails}
-            className="flex-shrink-0"
+            className="flex-shrink-0 group-hover:border-primary"
           >
             <Eye size={16} className="mr-2" />
             Details

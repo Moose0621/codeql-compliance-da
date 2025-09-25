@@ -53,6 +53,8 @@ function App() {
   const [detailsRepo, setDetailsRepo] = useState<Repository | null>(null);
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 30;
 
   // Load repositories when GitHub connection is established or restored
   useEffect(() => {
@@ -66,7 +68,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [githubConfig?.isConnected, githubConfig?.token, githubConfig?.organization]);
 
-  const fetchRepositories = async (showToast = true) => {
+  const fetchRepositories = async (showToast = true, append = false, pageParam = 1) => {
     if (!githubConfig?.token || !githubConfig?.organization) {
       if (showToast) {
         toast.error("GitHub connection required");
@@ -77,10 +79,10 @@ function App() {
     setIsLoading(true);
     try {
       const githubService = createGitHubService(githubConfig.token, githubConfig.organization);
-      const repos = await githubService.getOrganizationRepositories();
-      setRepositories(repos);
+      const repos = await githubService.getOrganizationRepositories(pageParam, PAGE_SIZE);
+      setRepositories(prev => append ? [...prev, ...repos] : repos);
       if (showToast) {
-        toast.success(`Loaded ${repos.length} repositories from ${githubConfig.organization}`);
+        toast.success(`${append ? 'Appended' : 'Loaded'} ${repos.length} repositories from ${githubConfig.organization}`);
       }
     } catch (error) {
       console.error('Failed to fetch repositories:', error);
@@ -114,7 +116,8 @@ function App() {
       return;
     }
     
-    await fetchRepositories(true);
+    setPage(1);
+    await fetchRepositories(true, false, 1);
   };
 
   const handleDispatchScan = async (repository: Repository) => {
@@ -273,6 +276,32 @@ function App() {
     }
     return list;
   }, [repositories, search, severityFilter]);
+
+  // Persist filters
+  useEffect(() => {
+    try {
+      localStorage.setItem('repo-filters', JSON.stringify({ search, severityFilter }));
+    } catch {}
+  }, [search, severityFilter]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('repo-filters');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.search) setSearch(parsed.search);
+        if (parsed.severityFilter) setSeverityFilter(parsed.severityFilter);
+      }
+    } catch {}
+    // run only once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const canLoadMore = repositories.length >= page * PAGE_SIZE; // heuristic
+  const loadMore = async () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    await fetchRepositories(false, true, nextPage);
+  };
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -468,17 +497,30 @@ function App() {
                   <p className="text-xs text-muted-foreground flex items-center gap-1"><FunnelSimple size={14} /> Showing {filteredRepositories.length} of {repositories.length}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredRepositories.map((repository, idx) => (
-                  <div key={repository.id} style={{ animationDelay: `${idx * 40}ms` }} className="animate-fade-in [animation-fill-mode:both]">
-                    <RepositoryCard
-                      repository={repository}
-                      onDispatchScan={handleDispatchScan}
-                      onViewDetails={handleViewDetails}
-                      isScanning={scanningRepos.has(repository.id)}
-                    />
-                  </div>
-                ))}
+                  {filteredRepositories.map((repository, idx) => {
+                    const scanHistory = scanRequests.filter(s => s.repository === repository.full_name)
+                      .sort((a,b)=> new Date(a.timestamp).getTime()-new Date(b.timestamp).getTime())
+                      .map(s => ({ timestamp: s.timestamp, findingsTotal: s.findings?.total }));
+                    return (
+                      <div key={repository.id} style={{ animationDelay: `${idx * 40}ms` }} className="animate-fade-in [animation-fill-mode:both]">
+                        <RepositoryCard
+                          repository={repository}
+                          onDispatchScan={handleDispatchScan}
+                          onViewDetails={handleViewDetails}
+                          isScanning={scanningRepos.has(repository.id)}
+                          scanHistory={scanHistory}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
+                {canLoadMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button onClick={loadMore} variant="outline" disabled={isLoading} className="min-w-[200px]">
+                      {isLoading ? 'Loading…' : 'Load More'}
+                    </Button>
+                  </div>
+                )}
               </>
             )}
           </TabsContent>

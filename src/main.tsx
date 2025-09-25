@@ -12,7 +12,8 @@ import "./index.css"
 
 createRoot(document.getElementById('root')!).render(
   <ErrorBoundary FallbackComponent={ErrorFallback}>
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    {/* Use data-appearance attribute to align with tailwind darkMode selector configuration */}
+    <ThemeProvider attribute="data-appearance" defaultTheme="system" enableSystem>
       <App />
     </ThemeProvider>
   </ErrorBoundary>

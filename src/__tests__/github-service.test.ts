@@ -21,6 +21,7 @@ function mockFetchSequence(responses: Array<{ ok?: boolean; status?: number; sta
 describe('GitHubService.getSecurityFindings', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    GitHubService.clearCache();
   });
 
   it('aggregates severity levels including derived mapping', async () => {
@@ -55,6 +56,7 @@ describe('GitHubService.getSecurityFindings', () => {
 describe('GitHubService.mapWorkflowStatus (indirect via getWorkflowRuns path)', () => {
   it('maps various statuses correctly through private helper by simulating getWorkflowRuns consumer', async () => {
     // Calls: getWorkflowRuns -> makeRequest
+    GitHubService.clearCache();
     mockFetchSequence([
       { json: { workflow_runs: [ { id: 1, name: 'CodeQL Analysis', path: '.github/workflows/codeql.yml', status: 'in_progress', conclusion: null, created_at: '', updated_at: '', html_url: '' } ] } },
     ]);
@@ -66,6 +68,8 @@ describe('GitHubService.mapWorkflowStatus (indirect via getWorkflowRuns path)', 
 
 describe('GitHubService ancillary functions', () => {
   it('finds CodeQL workflow then dispatches scan and fetches user/org info', async () => {
+    (global as any).__DISABLE_GITHUB_CACHE__ = true; // ensure deterministic fetch sequence
+    GitHubService.clearCache();
     mockFetchSequence([
       // initial findCodeQLWorkflow
       { json: { workflows: [ { id: 321, name: 'CodeQL', path: '.github/workflows/codeql.yml' } ] } },
