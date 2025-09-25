@@ -23,7 +23,7 @@ interface GitHubConfig {
 }
 
 interface GitHubConnectionProps {
-  onConnectionChange: (config: GitHubConfig) => void;
+  onConnectionChange: (config: GitHubConfig) => Promise<void>;
 }
 
 export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) {
@@ -43,14 +43,22 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
     userInfo?: any;
     orgInfo?: any;
   } | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<{
+    security_events: boolean | null;
+    actions: boolean | null;
+  }>({
+    security_events: null,
+    actions: null
+  });
 
   useEffect(() => {
     if (githubConfig) {
       setTempToken(githubConfig.token || "");
       setTempOrg(githubConfig.organization || "");
-      onConnectionChange(githubConfig);
+      // Call the callback but don't wait for it in useEffect
+      onConnectionChange(githubConfig).catch(console.error);
     }
-  }, [githubConfig, onConnectionChange]);
+  }, [githubConfig?.isConnected, githubConfig?.token, githubConfig?.organization, onConnectionChange]);
 
   const verifyConnection = async () => {
     if (!tempToken.trim() || !tempOrg.trim()) {
@@ -66,12 +74,14 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
       const userResponse = await fetch('https://api.github.com/user', {
         headers: {
           'Authorization': `token ${tempToken}`,
-          'Accept': 'application/vnd.github.v3+json'
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
         }
       });
 
       if (!userResponse.ok) {
-        throw new Error(`GitHub API error: ${userResponse.status} ${userResponse.statusText}`);
+        const errorText = await userResponse.text();
+        throw new Error(`GitHub API error: ${userResponse.status} ${userResponse.statusText}${errorText ? ` - ${errorText}` : ''}`);
       }
 
       const userInfo = await userResponse.json();
@@ -80,12 +90,14 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
       const orgResponse = await fetch(`https://api.github.com/orgs/${tempOrg}`, {
         headers: {
           'Authorization': `token ${tempToken}`,
-          'Accept': 'application/vnd.github.v3+json'
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
         }
       });
 
       if (!orgResponse.ok) {
-        throw new Error(`Organization access error: ${orgResponse.status} ${orgResponse.statusText}`);
+        const errorText = await orgResponse.text();
+        throw new Error(`Organization access error: ${orgResponse.status} ${orgResponse.statusText}${errorText ? ` - ${errorText}` : ''}`);
       }
 
       const orgInfo = await orgResponse.json();
@@ -94,12 +106,14 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
       const reposResponse = await fetch(`https://api.github.com/orgs/${tempOrg}/repos?per_page=1`, {
         headers: {
           'Authorization': `token ${tempToken}`,
-          'Accept': 'application/vnd.github.v3+json'
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
         }
       });
 
       if (!reposResponse.ok) {
-        throw new Error(`Repository access error: ${reposResponse.status} ${reposResponse.statusText}`);
+        const errorText = await reposResponse.text();
+        throw new Error(`Repository access error: ${reposResponse.status} ${reposResponse.statusText}${errorText ? ` - ${errorText}` : ''}`);
       }
 
       setVerificationResult({
@@ -159,7 +173,8 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
         {
           headers: {
             'Authorization': `token ${githubConfig.token}`,
-            'Accept': 'application/vnd.github.v3+json'
+            'Accept': 'application/vnd.github.v3+json',
+            'X-GitHub-Api-Version': '2022-11-28'
           }
         }
       );
@@ -170,22 +185,74 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
         {
           headers: {
             'Authorization': `token ${githubConfig.token}`,
-            'Accept': 'application/vnd.github.v3+json'
+            'Accept': 'application/vnd.github.v3+json',
+            'X-GitHub-Api-Version': '2022-11-28'
           }
         }
       );
 
-      const permissions = {
-        repos: true, // We already tested this
+      const newPermissionStatus = {
         security_events: alertsResponse.ok,
         actions: actionsResponse.ok
       };
 
+      setPermissionStatus(newPermissionStatus);
       toast.success("Permission check completed");
-      return permissions;
+      return newPermissionStatus;
 
     } catch (error) {
       toast.error("Failed to check permissions");
+    }
+  };
+
+  const testExistingConnection = async () => {
+    if (!githubConfig?.token || !githubConfig?.organization) return;
+
+    setIsVerifying(true);
+    try {
+      const userResponse = await fetch('https://api.github.com/user', {
+        headers: {
+          'Authorization': `token ${githubConfig.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+
+      if (!userResponse.ok) {
+        throw new Error(`Connection test failed: ${userResponse.status} ${userResponse.statusText}`);
+      }
+
+      // Test organization access
+      const orgResponse = await fetch(`https://api.github.com/orgs/${githubConfig.organization}/repos?per_page=1`, {
+        headers: {
+          'Authorization': `token ${githubConfig.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+
+      if (!orgResponse.ok) {
+        throw new Error(`Organization access failed: ${orgResponse.status} ${orgResponse.statusText}`);
+      }
+
+      // Update last verified timestamp
+      setGithubConfig(prev => ({
+        ...prev!,
+        lastVerified: new Date().toISOString()
+      }));
+
+      toast.success("Connection test successful!");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      toast.error(`Connection test failed: ${errorMessage}`);
+      
+      // If connection failed, mark as disconnected
+      setGithubConfig(prev => ({
+        ...prev!,
+        isConnected: false
+      }));
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -295,8 +362,11 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
                   </Alert>
 
                   <div className="flex gap-3">
+                    <Button variant="outline" onClick={testExistingConnection} disabled={isVerifying}>
+                      {isVerifying ? "Testing..." : "Test Connection"}
+                    </Button>
                     <Button variant="outline" onClick={testPermissions}>
-                      Test Permissions
+                      Check Permissions
                     </Button>
                     <Button variant="destructive" onClick={disconnect}>
                       Disconnect
@@ -360,15 +430,39 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Security Events</span>
-                          <Badge variant="outline">
-                            Click "Test Permissions" to verify
-                          </Badge>
+                          {permissionStatus.security_events === null ? (
+                            <Badge variant="outline">
+                              Click "Check Permissions" to verify
+                            </Badge>
+                          ) : permissionStatus.security_events ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              <CheckCircle size={12} className="mr-1" />
+                              Granted
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                              <XCircle size={12} className="mr-1" />
+                              Denied
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-sm">Actions Workflow</span>
-                          <Badge variant="outline">
-                            Click "Test Permissions" to verify
-                          </Badge>
+                          {permissionStatus.actions === null ? (
+                            <Badge variant="outline">
+                              Click "Check Permissions" to verify
+                            </Badge>
+                          ) : permissionStatus.actions ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              <CheckCircle size={12} className="mr-1" />
+                              Granted
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                              <XCircle size={12} className="mr-1" />
+                              Denied
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </CardContent>

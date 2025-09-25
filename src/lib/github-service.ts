@@ -25,87 +25,111 @@ export class GitHubService {
     });
 
     if (!response.ok) {
-      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text().catch(() => '');
+      let errorMessage = `GitHub API error: ${response.status} ${response.statusText}`;
+      
+      // Try to parse GitHub error response
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.message) {
+          errorMessage += ` - ${errorData.message}`;
+        }
+      } catch {
+        if (errorText) {
+          errorMessage += ` - ${errorText}`;
+        }
+      }
+
+      throw new Error(errorMessage);
     }
 
     return response.json();
   }
 
   async getOrganizationRepositories(page = 1, perPage = 30): Promise<Repository[]> {
-    const repos = await this.makeRequest<any[]>(
-      `/orgs/${this.config.organization}/repos?page=${page}&per_page=${perPage}&sort=updated&direction=desc`
-    );
+    try {
+      const repos = await this.makeRequest<any[]>(
+        `/orgs/${this.config.organization}/repos?page=${page}&per_page=${perPage}&sort=updated&direction=desc`
+      );
 
-    const repositoriesWithWorkflows = await Promise.all(
-      repos.map(async (repo) => {
-        try {
-          // Check for CodeQL workflows
-          const workflows = await this.getWorkflows(repo.name);
-          const hasCodeQLWorkflow = workflows.some((workflow: any) => 
-            workflow.name.toLowerCase().includes('codeql') || 
-            workflow.path.includes('codeql')
-          );
+      const repositoriesWithWorkflows = await Promise.allSettled(
+        repos.map(async (repo) => {
+          try {
+            // Check for CodeQL workflows
+            const workflows = await this.getWorkflows(repo.name);
+            const hasCodeQLWorkflow = workflows.some((workflow: any) => 
+              workflow.name.toLowerCase().includes('codeql') || 
+              workflow.path.includes('codeql')
+            );
 
-          // Get latest workflow runs for CodeQL
-          let lastScanDate: string | undefined;
-          let lastScanStatus: 'success' | 'failure' | 'in_progress' | 'pending' = 'pending';
+            // Get latest workflow runs for CodeQL
+            let lastScanDate: string | undefined;
+            let lastScanStatus: 'success' | 'failure' | 'in_progress' | 'pending' = 'pending';
 
-          if (hasCodeQLWorkflow) {
-            const runs = await this.getWorkflowRuns(repo.name, 'codeql');
-            if (runs.length > 0) {
-              const latestRun = runs[0];
-              lastScanDate = latestRun.updated_at;
-              lastScanStatus = this.mapWorkflowStatus(latestRun.status, latestRun.conclusion);
+            if (hasCodeQLWorkflow) {
+              const runs = await this.getWorkflowRuns(repo.name, 'codeql');
+              if (runs.length > 0) {
+                const latestRun = runs[0];
+                lastScanDate = latestRun.updated_at;
+                lastScanStatus = this.mapWorkflowStatus(latestRun.status, latestRun.conclusion);
+              }
             }
+
+            // Get security findings
+            const securityFindings = await this.getSecurityFindings(repo.name);
+
+            return {
+              id: repo.id,
+              name: repo.name,
+              full_name: repo.full_name,
+              owner: {
+                login: repo.owner.login,
+                avatar_url: repo.owner.avatar_url,
+              },
+              has_codeql_workflow: hasCodeQLWorkflow,
+              workflow_dispatch_enabled: hasCodeQLWorkflow,
+              default_branch: repo.default_branch,
+              last_scan_date: lastScanDate,
+              last_scan_status: lastScanStatus,
+              security_findings: securityFindings,
+            } as Repository;
+          } catch (error) {
+            console.warn(`Failed to fetch details for ${repo.name}:`, error);
+            return {
+              id: repo.id,
+              name: repo.name,
+              full_name: repo.full_name,
+              owner: {
+                login: repo.owner.login,
+                avatar_url: repo.owner.avatar_url,
+              },
+              has_codeql_workflow: false,
+              workflow_dispatch_enabled: false,
+              default_branch: repo.default_branch,
+              last_scan_date: undefined,
+              last_scan_status: 'pending',
+              security_findings: {
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 0,
+                note: 0,
+                total: 0,
+              },
+            } as Repository;
           }
+        })
+      );
 
-          // Get security findings
-          const securityFindings = await this.getSecurityFindings(repo.name);
+      // Filter out failed promises and extract successful results
+      return repositoriesWithWorkflows
+        .filter((result): result is PromiseFulfilledResult<Repository> => result.status === 'fulfilled')
+        .map(result => result.value);
 
-          return {
-            id: repo.id,
-            name: repo.name,
-            full_name: repo.full_name,
-            owner: {
-              login: repo.owner.login,
-              avatar_url: repo.owner.avatar_url,
-            },
-            has_codeql_workflow: hasCodeQLWorkflow,
-            workflow_dispatch_enabled: hasCodeQLWorkflow, // Assume workflow dispatch is enabled if CodeQL exists
-            default_branch: repo.default_branch,
-            last_scan_date: lastScanDate,
-            last_scan_status: lastScanStatus,
-            security_findings: securityFindings,
-          } as Repository;
-        } catch (error) {
-          console.warn(`Failed to fetch workflow info for ${repo.name}:`, error);
-          return {
-            id: repo.id,
-            name: repo.name,
-            full_name: repo.full_name,
-            owner: {
-              login: repo.owner.login,
-              avatar_url: repo.owner.avatar_url,
-            },
-            has_codeql_workflow: false,
-            workflow_dispatch_enabled: false,
-            default_branch: repo.default_branch,
-            last_scan_date: undefined,
-            last_scan_status: 'pending',
-            security_findings: {
-              critical: 0,
-              high: 0,
-              medium: 0,
-              low: 0,
-              note: 0,
-              total: 0,
-            },
-          } as Repository;
-        }
-      })
-    );
-
-    return repositoriesWithWorkflows;
+    } catch (error) {
+      console.error('Failed to fetch organization repositories:', error);
+      throw error;
+    }
   }
 
   async getWorkflows(repoName: string): Promise<any[]> {

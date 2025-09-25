@@ -12,7 +12,7 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { QuickExport } from "@/components/QuickExport";
 import { ExportStatus } from "@/components/ExportStatus";
 import { GitHubConnection } from "@/components/GitHubConnection";
-import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch } from "@phosphor-icons/react";
+import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useKV } from '@github/spark/hooks';
 import { createGitHubService } from '@/lib/github-service';
@@ -45,17 +45,22 @@ function App() {
 
   // Load repositories when GitHub connection is established
   useEffect(() => {
-    if (githubConfig?.isConnected) {
+    if (githubConfig?.isConnected && githubConfig?.token && githubConfig?.organization) {
       setActiveTab("repositories");
       fetchRepositories();
     } else {
       setRepositories([]);
-      setActiveTab("setup");
+      if (!githubConfig?.isConnected) {
+        setActiveTab("setup");
+      }
     }
-  }, [githubConfig?.isConnected]);
+  }, [githubConfig?.isConnected, githubConfig?.token, githubConfig?.organization]);
 
-  const fetchRepositories = async () => {
+  const fetchRepositories = async (showToast = true) => {
     if (!githubConfig?.token || !githubConfig?.organization) {
+      if (showToast) {
+        toast.error("GitHub connection required");
+      }
       return;
     }
 
@@ -64,18 +69,33 @@ function App() {
       const githubService = createGitHubService(githubConfig.token, githubConfig.organization);
       const repos = await githubService.getOrganizationRepositories();
       setRepositories(repos);
-      toast.success(`Loaded ${repos.length} repositories from ${githubConfig.organization}`);
+      if (showToast) {
+        toast.success(`Loaded ${repos.length} repositories from ${githubConfig.organization}`);
+      }
     } catch (error) {
       console.error('Failed to fetch repositories:', error);
-      toast.error("Failed to fetch repositories from GitHub");
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to fetch repositories: ${errorMessage}`);
+      
+      // If token is invalid, disconnect
+      if (errorMessage.includes('401') || errorMessage.includes('403')) {
+        setGithubConfig(prev => ({
+          token: "",
+          organization: "",
+          isConnected: false
+        }));
+        setActiveTab("setup");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleConnectionChange = (config: GitHubConfig) => {
-    // This will be called when the GitHub connection status changes
-    // The useEffect above will handle fetching repositories
+  const handleConnectionChange = async (config: GitHubConfig) => {
+    // Force refresh repositories when connection changes
+    if (config.isConnected && config.token && config.organization) {
+      await fetchRepositories(false); // Don't show toast since connection success already shows one
+    }
   };
 
   const handleRefreshRepositories = async () => {
@@ -84,7 +104,7 @@ function App() {
       return;
     }
     
-    await fetchRepositories();
+    await fetchRepositories(true);
   };
 
   const handleDispatchScan = async (repository: Repository) => {
@@ -234,9 +254,14 @@ function App() {
               <h1 className="text-3xl font-bold text-foreground">CodeQL Security Dashboard</h1>
               <p className="text-muted-foreground">
                 Enterprise FedRAMP Compliance Monitoring
-                {githubConfig?.isConnected && (
-                  <span className="ml-2">
-                    • Connected to <strong>{githubConfig.organization}</strong>
+                {githubConfig?.isConnected ? (
+                  <span className="ml-2 flex items-center gap-1 text-green-600">
+                    <CheckCircle size={16} />
+                    Connected to <strong>{githubConfig.organization}</strong>
+                  </span>
+                ) : (
+                  <span className="ml-2 text-orange-600">
+                    • GitHub connection required
                   </span>
                 )}
               </p>
@@ -362,6 +387,16 @@ function App() {
                     <ArrowClockwise size={16} className="mr-2" />
                     Refresh Repositories
                   </Button>
+                </CardContent>
+              </Card>
+            ) : isLoading ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <ArrowClockwise size={48} className="mx-auto mb-4 text-muted-foreground animate-spin" />
+                  <h3 className="text-lg font-medium mb-2">Loading Repositories</h3>
+                  <p className="text-muted-foreground">
+                    Fetching repositories from {githubConfig.organization}...
+                  </p>
                 </CardContent>
               </Card>
             ) : (
