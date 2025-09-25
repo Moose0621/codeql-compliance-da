@@ -23,7 +23,7 @@ jobs:
           # Fail on critical or high severity vulnerabilities
           fail-on-severity: high
           # Allow licenses commonly used in enterprise environments
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, BlueOak-1.0.0, MPL-2.0, MIT-0, Python-2.0, CC-BY-4.0, Unlicense, 0BSD, Apache-2.0 AND MIT, MIT AND ISC, UNLICENSED
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, BlueOak-1.0.0, MPL-2.0, MIT-0, Python-2.0, CC-BY-4.0, UNLICENSED, 0BSD, Apache-2.0 AND MIT, MIT AND ISC, UNLICENSED
           # Deny problematic licenses
           deny-licenses: GPL-2.0, GPL-3.0, LGPL-2.1, LGPL-3.0, AGPL-1.0, AGPL-3.0
           # Create a comment on PR with summary
