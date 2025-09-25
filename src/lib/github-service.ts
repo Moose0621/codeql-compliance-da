@@ -422,12 +422,32 @@ export class GitHubService {
     }
   }
 
-  async dispatchCodeQLScan(repoName: string, ref: string = 'main'): Promise<void> {
-    // Pre-flight permission check
-    try {
-      await assertWorkflowDispatchable(`${this.config.organization}/${repoName}`, this.config.token);
-    } catch (error) {
-      throw new Error(`Cannot dispatch CodeQL scan: ${error instanceof Error ? error.message : String(error)}`);
+  // In-memory cache for pre-flight check results
+  private _preflightCache: Map<string, { result: boolean, timestamp: number }> = new Map();
+
+  /**
+   * Dispatches a CodeQL scan for the given repository.
+   * @param repoName Repository name
+   * @param ref Branch or ref to scan (default: 'main')
+   * @param skipPreflightCheck If true, skips the pre-flight dispatchability check (default: false)
+   */
+  async dispatchCodeQLScan(repoName: string, ref: string = 'main', skipPreflightCheck: boolean = false): Promise<void> {
+    // Pre-flight permission check with caching
+    if (!skipPreflightCheck) {
+      const cacheKey = `${this.config.organization}/${repoName}:${this.config.token}`;
+      const cacheTTL = 5 * 60 * 1000; // 5 minutes
+      const now = Date.now();
+      const cached = this._preflightCache.get(cacheKey);
+      if (!cached || (now - cached.timestamp) > cacheTTL) {
+        try {
+          await assertWorkflowDispatchable(`${this.config.organization}/${repoName}`, this.config.token);
+          this._preflightCache.set(cacheKey, { result: true, timestamp: now });
+        } catch (error) {
+          this._preflightCache.delete(cacheKey);
+          throw new Error(`Cannot dispatch CodeQL scan: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      // If cached and fresh, do nothing (assume dispatchable)
     }
 
     const workflowId = await this.findCodeQLWorkflow(repoName);
