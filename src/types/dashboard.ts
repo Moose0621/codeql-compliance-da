@@ -79,4 +79,98 @@ export interface ComplianceReport {
   };
 }
 
+// SARIF and Default Setup Analysis Types
+export interface SarifAnalysis {
+  id: number;
+  ref: string;
+  commit_sha: string;
+  analysis_key: string;
+  created_at: string;
+  results_count: number;
+  rules_count: number;
+  sarif_id: string;
+  tool: {
+    name: string;
+    version?: string;
+  };
+  category?: string;
+  deletable: boolean;
+  warning?: string;
+}
+
+export interface SarifData {
+  version: string;
+  runs: Array<{
+    tool: {
+      driver: {
+        name: string;
+        version?: string;
+        informationUri?: string;
+        rules?: Array<{
+          id: string;
+          shortDescription?: { text: string };
+          fullDescription?: { text: string };
+          help?: { text: string; markdown?: string };
+          properties?: Record<string, unknown>;
+        }>;
+      };
+    };
+    results?: Array<{
+      ruleId?: string;
+      message: { text: string };
+      locations: Array<{
+        physicalLocation: {
+          artifactLocation: { uri: string };
+          region: {
+            startLine: number;
+            endLine?: number;
+            startColumn?: number;
+            endColumn?: number;
+          };
+        };
+      }>;
+      properties?: Record<string, unknown>;
+    }>;
+    properties?: Record<string, unknown>;
+  }>;
+  properties?: Record<string, unknown>;
+}
+
+export interface DefaultSetupConfig {
+  state: 'configured' | 'not-configured';
+  languages?: string[];
+  query_suite?: string;
+  updated_at?: string;
+}
+
+export interface AnalysisResults {
+  repository: Repository;
+  latestAnalysis: SarifAnalysis | null;
+  scanAge: number; // hours since last scan
+  canRetrieveSarif: boolean;
+  recommendedAction: 'current' | 'refresh_needed' | 'setup_required';
+  setupType: 'default' | 'advanced' | 'none';
+}
+
+export interface ScanSummary {
+  repository: Repository;
+  latestScan: {
+    date: string;
+    status: 'success' | 'failure';
+    resultsCount: number;
+    rulesCount: number;
+    commitSha: string;
+    scanType: 'default-setup' | 'advanced';
+    toolVersion?: string;
+  } | null;
+  historicalTrend: Array<{
+    date: string;
+    resultsCount: number;
+    commitSha: string;
+  }>;
+  sarifAvailable: boolean;
+  recommendations: string[];
+  setupType: 'default' | 'advanced' | 'none';
+}
+
 export type ExportFormat = 'pdf' | 'csv' | 'json' | 'xlsx';

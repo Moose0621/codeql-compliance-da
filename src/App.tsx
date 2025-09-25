@@ -49,6 +49,7 @@ function App() {
   const [exportHistory, setExportHistory] = usePersistentConfig<Array<{id: string, format: ExportFormat, timestamp: string}>>("export-history", []);
   const [isLoading, setIsLoading] = useState(false);
   const [scanningRepos, setScanningRepos] = useState<Set<number>>(new Set());
+  const [refreshingRepos, setRefreshingRepos] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState("setup");
   const [detailsRepo, setDetailsRepo] = useState<Repository | null>(null);
   const [search, setSearch] = useState("");
@@ -91,7 +92,7 @@ function App() {
       
       // If token is invalid, disconnect
       if (errorMessage.includes('401') || errorMessage.includes('403')) {
-        setGithubConfig(prev => ({
+        setGithubConfig(() => ({
           token: "",
           organization: "",
           isConnected: false
@@ -223,6 +224,33 @@ function App() {
     }
   };
 
+  const handleRefreshResults = async (repository: Repository) => {
+    if (!githubConfig?.token || !githubConfig?.organization) {
+      toast.error("GitHub connection required to refresh results");
+      return;
+    }
+    setRefreshingRepos(prev => new Set(prev).add(repository.id));
+    try {
+      const svc = createGitHubService(githubConfig.token, githubConfig.organization);
+      const [findings, analysis] = await Promise.all([
+        svc.getSecurityFindings(repository.name),
+        svc.analyzeRepositorySetup(repository.name)
+      ]);
+      setRepositories(prev => prev.map(r => r.id === repository.id ? {
+        ...r,
+        security_findings: findings,
+        last_scan_date: analysis.latestAnalysis?.created_at || r.last_scan_date,
+        last_scan_status: analysis.latestAnalysis ? 'success' : r.last_scan_status
+      } : r));
+      toast.success(`Refreshed results for ${repository.name}`);
+    } catch (e) {
+      console.warn('Refresh failed', e);
+      toast.error(`Failed to refresh ${repository.name}`);
+    } finally {
+      setRefreshingRepos(prev => { const n = new Set(prev); n.delete(repository.id); return n; });
+    }
+  };
+
   const handleViewDetails = (repository: Repository) => {
     setDetailsRepo(repository);
   };
@@ -297,7 +325,6 @@ function App() {
       // Ignore localStorage errors (e.g., invalid JSON)
     }
     // run only once
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const canLoadMore = repositories.length >= page * PAGE_SIZE; // heuristic
@@ -511,7 +538,9 @@ function App() {
                           repository={repository}
                           onDispatchScan={handleDispatchScan}
                           onViewDetails={handleViewDetails}
+                          onRefreshLatest={handleRefreshResults}
                           isScanning={scanningRepos.has(repository.id)}
+                          isRefreshing={refreshingRepos.has(repository.id)}
                           scanHistory={scanHistory}
                         />
                       </div>

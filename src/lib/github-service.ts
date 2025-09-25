@@ -1,4 +1,4 @@
-import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert } from '@/types/dashboard';
+import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert, SarifAnalysis, SarifData, DefaultSetupConfig } from '@/types/dashboard';
 import { assertWorkflowDispatchable } from './github-dispatch-check';
 /**
  * Architectural scalability notes (incremental implementation):
@@ -400,11 +400,22 @@ export class GitHubService {
   async findCodeQLWorkflow(repoName: string): Promise<number | null> {
     try {
       const workflows = await this.getWorkflows(repoName);
-      const codeqlWorkflow = workflows.find((workflow) =>
-        workflow.name.toLowerCase().includes('codeql') ||
-        workflow.path.includes('codeql')
+      
+      // Priority 1: Look for Advanced CodeQL workflows with workflow_dispatch
+      const advancedWorkflow = workflows.find((workflow) =>
+        (workflow.name?.toLowerCase().includes('codeql') || workflow.path?.includes('codeql')) &&
+        workflow.path !== '.github/workflows/codeql.yml' && // Avoid GitHub's default setup
+        workflow.path.includes('advanced')
       );
-      return codeqlWorkflow ? codeqlWorkflow.id : null;
+      
+      if (advancedWorkflow) return advancedWorkflow.id;
+      
+      // Priority 2: Any CodeQL workflow that might support dispatch
+      const anyCodeQLWorkflow = workflows.find((workflow) =>
+        workflow.name?.toLowerCase().includes('codeql') || workflow.path?.includes('codeql')
+      );
+      
+      return anyCodeQLWorkflow ? anyCodeQLWorkflow.id : null;
     } catch (error) {
       console.error(`Failed to find CodeQL workflow for ${repoName}:`, error);
       return null;
@@ -461,6 +472,195 @@ export class GitHubService {
       default:
         return 'note';
     }
+  }
+
+  // SARIF and Default Setup Analysis Methods
+
+  /**
+   * Get code scanning analyses for a repository
+   * @param repoName Repository name
+   * @param toolName Tool name filter (default: CodeQL)
+   * @param perPage Number of results per page (default: 30)
+   * @param page Page number (default: 1)
+   * @returns Array of analysis results
+   */
+  async getCodeScanningAnalyses(repoName: string, toolName: string = 'CodeQL', perPage: number = 30, page: number = 1): Promise<SarifAnalysis[]> {
+    try {
+      const params = new URLSearchParams({
+        tool_name: toolName,
+        per_page: perPage.toString(),
+        page: page.toString()
+      });
+
+      return await this.makeRequest<SarifAnalysis[]>(
+        `/repos/${this.config.organization}/${repoName}/code-scanning/analyses?${params}`,
+        {},
+        { cacheTTL: 30_000 } // 30 second cache for analysis lists
+      );
+    } catch (error) {
+      console.warn(`Failed to fetch code scanning analyses for ${repoName}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get the latest CodeQL analysis for a repository
+   * @param repoName Repository name
+   * @param toolName Tool name filter (default: CodeQL)
+   * @returns Latest analysis or null if none found
+   */
+  async getLatestAnalysis(repoName: string, toolName: string = 'CodeQL'): Promise<SarifAnalysis | null> {
+    const analyses = await this.getCodeScanningAnalyses(repoName, toolName, 5, 1);
+    return analyses.length > 0 ? analyses[0] : null;
+  }
+
+  /**
+   * Get historical analyses for a repository within a date range
+   * @param repoName Repository name
+   * @param days Number of days to look back (default: 30)
+   * @param toolName Tool name filter (default: CodeQL)
+   * @returns Array of historical analyses
+   */
+  async getHistoricalAnalyses(repoName: string, days: number = 30, toolName: string = 'CodeQL'): Promise<SarifAnalysis[]> {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    
+    try {
+      const allAnalyses: SarifAnalysis[] = [];
+      let page = 1;
+      const maxPages = 3; // Limit to 3 pages to avoid excessive API calls
+      
+      while (page <= maxPages) {
+        const analyses = await this.getCodeScanningAnalyses(repoName, toolName, 30, page);
+        
+        if (analyses.length === 0) break;
+        
+        // Filter for analyses within the date range
+        const recentAnalyses = analyses.filter(analysis => 
+          new Date(analysis.created_at) >= since
+        );
+        
+        allAnalyses.push(...recentAnalyses);
+        
+        // If we got less than a full page or all results are outside date range, stop
+        if (analyses.length < 30 || recentAnalyses.length === 0) break;
+        
+        page++;
+      }
+      
+      return allAnalyses;
+    } catch (error) {
+      console.warn(`Failed to fetch historical analyses for ${repoName}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get SARIF data for a specific analysis
+   * @param repoName Repository name
+   * @param analysisId Analysis ID
+   * @returns SARIF data in SARIF 2.1.0 format
+   */
+  async getSarifData(repoName: string, analysisId: number): Promise<SarifData> {
+    try {
+      return await this.makeRequest<SarifData>(
+        `/repos/${this.config.organization}/${repoName}/code-scanning/analyses/${analysisId}`,
+        {
+          headers: {
+            'Accept': 'application/sarif+json'
+          }
+        },
+        { cacheTTL: 300_000 } // 5 minute cache for SARIF data
+      );
+    } catch (error) {
+      console.error(`Failed to fetch SARIF data for analysis ${analysisId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Default Setup configuration for a repository
+   * @param repoName Repository name
+   * @returns Default Setup configuration or null if not configured
+   */
+  async getDefaultSetupConfig(repoName: string): Promise<DefaultSetupConfig | null> {
+    try {
+      return await this.makeRequest<DefaultSetupConfig>(
+        `/repos/${this.config.organization}/${repoName}/code-scanning/default-setup`,
+        {},
+        { cacheTTL: 300_000 } // 5 minute cache for setup configuration
+      );
+    } catch (error) {
+      // 404 means no Default Setup configured
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      console.warn(`Failed to fetch Default Setup config for ${repoName}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Analyze repository setup type and latest scan status
+   * @param repoName Repository name
+   * @returns Analysis results with recommendations
+   */
+  async analyzeRepositorySetup(repoName: string): Promise<{
+    setupType: 'default' | 'advanced' | 'none';
+    hasDefaultSetup: boolean;
+    hasAdvancedWorkflow: boolean;
+    latestAnalysis: SarifAnalysis | null;
+    scanAge: number; // hours since last scan
+    recommendedAction: 'current' | 'refresh_needed' | 'setup_required';
+    canRetrieveSarif: boolean;
+  }> {
+    // Check Default Setup configuration
+    const defaultConfig = await this.getDefaultSetupConfig(repoName);
+    const hasDefaultSetup = defaultConfig?.state === 'configured';
+    
+    // Check for Advanced CodeQL workflows
+    const workflows = await this.getWorkflows(repoName);
+    const hasAdvancedWorkflow = workflows.some((workflow: { name?: string; path?: string }) =>
+      (workflow.name?.toLowerCase().includes('codeql') || workflow.path?.includes('codeql')) &&
+      workflow.path !== '.github/workflows/codeql.yml' // Exclude GitHub's default setup file
+    );
+    
+    // Determine setup type
+    let setupType: 'default' | 'advanced' | 'none' = 'none';
+    if (hasDefaultSetup) {
+      setupType = 'default';
+    } else if (hasAdvancedWorkflow) {
+      setupType = 'advanced';
+    }
+    
+    // Get latest analysis
+    const latestAnalysis = await this.getLatestAnalysis(repoName);
+    
+    // Calculate scan age
+    const scanAge = latestAnalysis 
+      ? Math.floor((Date.now() - new Date(latestAnalysis.created_at).getTime()) / (1000 * 60 * 60))
+      : Infinity;
+
+    // Determine recommended action
+    let recommendedAction: 'current' | 'refresh_needed' | 'setup_required' = 'setup_required';
+    
+    if (latestAnalysis) {
+      if (scanAge <= 24) {
+        recommendedAction = 'current'; // Less than 24 hours old
+      } else if (scanAge <= 168) { // Less than 7 days
+        recommendedAction = 'refresh_needed';
+      }
+    }
+
+    return {
+      setupType,
+      hasDefaultSetup,
+      hasAdvancedWorkflow,
+      latestAnalysis,
+      scanAge,
+      recommendedAction,
+      canRetrieveSarif: !!latestAnalysis
+    };
   }
 }
 
