@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-verify:
+    name: Lint • Typecheck • Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # future: security-events: write (for code scanning)
+    strategy:
+      matrix:
+        node: [18.x, 20.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload production build artifact
+        if: matrix.node == '20.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist
+          if-no-files-found: error
+
+      - name: Detect test script
+        id: has_tests
+        run: |
+          if npm run | grep -q " test"; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run unit tests (placeholder)
+        if: steps.has_tests.outputs.has_tests == 'true'
+        run: npm test -- --reporter=default
+
+      - name: Post summary
+        if: always()
+        run: |
+          echo "### CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Node version: ${{ matrix.node }}" >> $GITHUB_STEP_SUMMARY
+          echo "Lint / Typecheck / Build complete" >> $GITHUB_STEP_SUMMARY
+
+  # Placeholder for future e2e job (Playwright)
+  # e2e:
+  #   needs: build-and-verify
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: dist-${{ github.sha }}
+  #     - name: Install dependencies
+  #       run: npm ci
+  #     - name: Run Playwright tests
+  #       run: npx playwright test --reporter=dot
+  #     - name: Upload test report
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: playwright-report-${{ github.sha }}
+  #         path: playwright-report
+
+# Notes:
+# - CodeQL / dependency scanning can be appended in a separate workflow.
+# - When tests are added, add a coverage step and comment on PR with results.
+# - Consider adding caching for build output if build time becomes significant.
