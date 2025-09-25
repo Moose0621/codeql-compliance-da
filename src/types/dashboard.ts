@@ -173,4 +173,19 @@ export interface ScanSummary {
   setupType: 'default' | 'advanced' | 'none';
 }
 
+// Global scan freshness aggregation
+export interface FreshnessBuckets {
+  fresh24h: number; // scans within last 24h
+  stale7d: number;  // scans >24h and <=7d
+  old: number;      // scans >7d
+  never: number;    // no scan recorded
+}
+
+export interface FreshnessSummary {
+  total: number;
+  buckets: FreshnessBuckets;
+  freshnessScore: number; // 0-100 weighted score (recent scans contribute more)
+  generated_at: string;
+}
+
 export type ExportFormat = 'pdf' | 'csv' | 'json' | 'xlsx';

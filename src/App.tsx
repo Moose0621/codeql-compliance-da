@@ -7,6 +7,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Toaster } from "@/components/ui/sonner";
 import { RepositoryCard } from "@/components/RepositoryCard";
 import { SecurityChart } from "@/components/SecurityChart";
+import { ResultsFreshnessPanel } from '@/components/ResultsFreshnessPanel';
+import { SarifExportPanel } from '@/components/SarifExportPanel';
 import { AuditTrail } from "@/components/AuditTrail";
 import { ExportDialog } from "@/components/ExportDialog";
 import { QuickExport } from "@/components/QuickExport";
@@ -559,11 +561,19 @@ function App() {
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
-            <SecurityChart 
-              findings={repositories.map(r => r.security_findings || {
-                critical: 0, high: 0, medium: 0, low: 0, note: 0, total: 0
-              })} 
-            />
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="xl:col-span-2 space-y-6">
+                <SecurityChart 
+                  findings={repositories.map(r => r.security_findings || {
+                    critical: 0, high: 0, medium: 0, low: 0, note: 0, total: 0
+                  })} 
+                />
+                <SarifExportPanel repositories={repositories} token={githubConfig?.token} organization={githubConfig?.organization} />
+              </div>
+              <div className="space-y-6">
+                <ResultsFreshnessPanel repositories={repositories} />
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="audit" className="space-y-6">
