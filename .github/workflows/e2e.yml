@@ -29,13 +29,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check if E2E tests exist
+        id: check_tests
+        run: |
+          if [ -f "playwright.config.ts" ] && [ -d "tests/e2e" ]; then
+            echo "tests_exist=true" >> $GITHUB_OUTPUT
+          else
+            echo "tests_exist=false" >> $GITHUB_OUTPUT
+            echo "⚠️ No E2E tests found, skipping Playwright tests"
+          fi
+
       - name: Install Playwright browsers
+        if: steps.check_tests.outputs.tests_exist == 'true'
         run: npx playwright install --with-deps
 
       - name: Build application
         run: npm run build
 
       - name: Run Playwright tests
+        if: steps.check_tests.outputs.tests_exist == 'true'
         run: npx playwright test
         env:
           # Use preview server for testing
@@ -43,7 +55,7 @@ jobs:
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.check_tests.outputs.tests_exist == 'true'
         with:
           name: playwright-report-${{ github.sha }}
           path: playwright-report
@@ -51,7 +63,7 @@ jobs:
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.check_tests.outputs.tests_exist == 'true'
         with:
           name: test-results-${{ github.sha }}
           path: test-results

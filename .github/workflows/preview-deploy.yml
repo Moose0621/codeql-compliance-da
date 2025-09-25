@@ -35,9 +35,9 @@ jobs:
       - name: Build application
         run: npm run build
         env:
-          # Use staging/preview environment variables
-          VITE_GITHUB_TOKEN: ${{ secrets.PREVIEW_GITHUB_TOKEN }}
-          VITE_GITHUB_ORG: ${{ secrets.PREVIEW_GITHUB_ORG }}
+          # Use staging/preview environment variables if available
+          VITE_GITHUB_TOKEN: ${{ secrets.PREVIEW_GITHUB_TOKEN || '' }}
+          VITE_GITHUB_ORG: ${{ secrets.PREVIEW_GITHUB_ORG || 'demo-org' }}
 
       # Note: This action and secrets will be configured during Azure setup
       # - name: Deploy to Azure Static Web Apps (Preview)

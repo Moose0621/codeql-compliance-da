@@ -17,25 +17,28 @@ export function QuickExport({ repositories, organizationName = "Enterprise Organ
 
     try {
       switch (format) {
-        case 'pdf':
+        case 'pdf': {
           const pdfContent = ComplianceReportGenerator.exportAsPDF(report);
           printPDF(pdfContent);
           toast.success("PDF report opened for printing/saving");
           break;
+        }
           
-        case 'csv':
+        case 'csv': {
           const csvContent = ComplianceReportGenerator.exportAsCSV(report);
           const csvFilename = `compliance-quick-export-${timestamp}.csv`;
           downloadFile(csvContent, csvFilename, 'text/csv');
           toast.success("CSV data downloaded");
           break;
+        }
           
-        case 'json':
+        case 'json': {
           const jsonContent = ComplianceReportGenerator.exportAsJSON(report);
           const jsonFilename = `compliance-quick-export-${timestamp}.json`;
           downloadFile(jsonContent, jsonFilename, 'application/json');
           toast.success("JSON data downloaded");
           break;
+        }
       }
     } catch (error) {
       toast.error(`Failed to export ${format.toUpperCase()} report`);

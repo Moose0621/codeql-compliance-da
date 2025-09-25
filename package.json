@@ -11,9 +11,9 @@
         "typecheck": "tsc --noEmit --pretty false",
         "test": "vitest run --coverage --reporter=default",
         "test:watch": "vitest",
-        "test:e2e": "playwright test",
-        "test:e2e:ui": "playwright test --ui",
-        "test:e2e:headed": "playwright test --headed",
+        "test:e2e": "npx playwright test",
+        "test:e2e:ui": "npx playwright test --ui",
+        "test:e2e:headed": "npx playwright test --headed",
         "optimize": "vite optimize",
         "preview": "vite preview"
     },

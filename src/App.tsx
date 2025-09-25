@@ -281,7 +281,9 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('repo-filters', JSON.stringify({ search, severityFilter }));
-    } catch {}
+    } catch {
+      // Ignore localStorage errors (e.g., storage quota exceeded)
+    }
   }, [search, severityFilter]);
   useEffect(() => {
     try {
@@ -291,7 +293,9 @@ function App() {
         if (parsed.search) setSearch(parsed.search);
         if (parsed.severityFilter) setSeverityFilter(parsed.severityFilter);
       }
-    } catch {}
+    } catch {
+      // Ignore localStorage errors (e.g., invalid JSON)
+    }
     // run only once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
