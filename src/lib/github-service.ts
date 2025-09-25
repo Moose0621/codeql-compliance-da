@@ -1,4 +1,5 @@
 import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert } from '@/types/dashboard';
+import { assertWorkflowDispatchable, type WorkflowDispatchError } from './github-dispatch-check';
 /**
  * Architectural scalability notes (incremental implementation):
  * 1. Centralized rate limit tracking & adaptive backoff to prevent hard 403s.
@@ -142,6 +143,8 @@ export class GitHubService {
         // Handle secondary rate limits with adaptive delay (simplified heuristic)
         if (response && response.status === 403) {
           const bodyText = await response.text().catch(() => '');
+          
+          // Check if it's a rate limit issue
           if (/rate limit/i.test(bodyText) || /abuse/i.test(bodyText)) {
             // Force gate to wait for reset next calls
             if (GitHubService.rateLimit.reset) {
@@ -150,10 +153,22 @@ export class GitHubService {
                 await new Promise(r => setTimeout(r, Math.min(wait, 60_000))); // wait at most 60s inline
               }
             }
+            throw new Error(`GitHub API error: 403 ${bodyText.substring(0, 200)}`);
           }
-          // Reconstruct error body for message
+          
+          // Check if it's a workflow dispatch permission issue
+          if (endpoint.includes('/dispatches') && /not accessible by.*token|Resource not accessible|workflow.*permission/i.test(bodyText)) {
+            throw new Error(
+              `GitHub API error: 403 - Insufficient permissions for workflow dispatch. ` +
+              `Please ensure your token has the "workflow" scope (classic PAT) or "Actions: Read and write" permission (fine-grained PAT). ` +
+              `Details: ${bodyText.substring(0, 100)}`
+            );
+          }
+          
+          // Generic 403 error
           throw new Error(`GitHub API error: 403 ${bodyText.substring(0, 200)}`);
         }
+        
         const errorText = response ? await response.text().catch(() => '') : '';
         let errorMessage = response ? `GitHub API error: ${response.status} ${response.statusText}` : 'GitHub API error: unknown (no response)';
         try {
@@ -356,19 +371,30 @@ export class GitHubService {
   }
 
   async dispatchWorkflow(repoName: string, workflowId: string | number, ref: string = 'main'): Promise<void> {
-    await this.makeRequest(
-      `/repos/${this.config.organization}/${repoName}/actions/workflows/${workflowId}/dispatches`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ref: ref,
-          inputs: {},
-        }),
+    try {
+      await this.makeRequest(
+        `/repos/${this.config.organization}/${repoName}/actions/workflows/${workflowId}/dispatches`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ref: ref,
+            inputs: {},
+          }),
+        }
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('403')) {
+        throw new Error(
+          `Failed to dispatch workflow: Insufficient permissions. ` +
+          `Please ensure your token has the "workflow" scope (classic PAT) or "Actions: Read and write" permission (fine-grained PAT). ` +
+          `Also check that repository Actions are set to "Read and write" in Settings > Actions > General > Workflow permissions.`
+        );
       }
-    );
+      throw error;
+    }
   }
 
   async findCodeQLWorkflow(repoName: string): Promise<number | null> {
@@ -386,9 +412,20 @@ export class GitHubService {
   }
 
   async dispatchCodeQLScan(repoName: string, ref: string = 'main'): Promise<void> {
+    // Pre-flight permission check
+    try {
+      await assertWorkflowDispatchable(`${this.config.organization}/${repoName}`, this.config.token);
+    } catch (error) {
+      if ((error as WorkflowDispatchError).code === 'INSUFFICIENT_PERMISSIONS') {
+        throw new Error(
+          `Cannot dispatch CodeQL scan: ${error.message}. Suggestions: ${(error as WorkflowDispatchError).suggestions.join('; ')}`
+        );
+      }
+    }
+
     const workflowId = await this.findCodeQLWorkflow(repoName);
     if (!workflowId) {
-      throw new Error(`No CodeQL workflow found for repository ${repoName}`);
+      throw new Error(`No CodeQL workflow found for repository ${repoName}. Ensure a CodeQL workflow exists with workflow_dispatch trigger.`);
     }
     
     await this.dispatchWorkflow(repoName, workflowId, ref);

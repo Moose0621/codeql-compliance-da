@@ -15,6 +15,14 @@ function mockFetchSequence(responses: Array<{ ok?: boolean; status?: number; sta
       statusText: r.statusText ?? 'OK',
       json: async () => r.json,
       text: async () => JSON.stringify(r.json || {}),
+      headers: {
+        get: (header: string) => {
+          if (header === 'X-RateLimit-Remaining') return '50';
+          if (header === 'X-RateLimit-Limit') return '60';
+          if (header === 'X-RateLimit-Reset') return String(Math.floor(Date.now() / 1000) + 3600);
+          return null;
+        }
+      }
     } as any;
   });
 }
@@ -67,11 +75,65 @@ describe('GitHubService.mapWorkflowStatus (indirect via getWorkflowRuns path)', 
   });
 });
 
+describe('GitHubService workflow dispatch error handling', () => {
+  it('should provide specific error message for 403 workflow dispatch errors', async () => {
+    (global as any).__DISABLE_GITHUB_CACHE__ = true;
+    
+    mockFetchSequence([{
+      ok: false,
+      status: 403,
+      json: {
+        message: "Resource not accessible by personal access token",
+        documentation_url: "https://docs.github.com/rest/actions/workflows#create-a-workflow-dispatch-event"
+      }
+    }]);
+    
+    const svc = new GitHubService({ token: 't', organization: 'org' });
+    
+    await expect(svc.dispatchWorkflow('repo1', 123, 'main'))
+      .rejects
+      .toThrow(/Failed to dispatch workflow.*Insufficient permissions/);
+  });
+
+  it('should handle dispatchCodeQLScan with better error messages', async () => {
+    (global as any).__DISABLE_GITHUB_CACHE__ = true;
+    
+    mockFetchSequence([{
+      ok: true,
+      json: { workflows: [] }
+    }]);
+    
+    const svc = new GitHubService({ token: 't', organization: 'org' });
+    
+    await expect(svc.dispatchCodeQLScan('repo1'))
+      .rejects
+      .toThrow(/No CodeQL workflow found.*Ensure a CodeQL workflow exists with workflow_dispatch trigger/);
+  });
+
+  it('should provide permission-specific error for CodeQL scan dispatch failure', async () => {
+    (global as any).__DISABLE_GITHUB_CACHE__ = true;
+    
+    mockFetchSequence([{
+      ok: false,
+      status: 403,
+      json: {}
+    }]);
+    
+    const svc = new GitHubService({ token: 't', organization: 'org' });
+    
+    await expect(svc.dispatchCodeQLScan('repo1'))
+      .rejects
+      .toThrow(/Cannot dispatch CodeQL scan.*403 listing workflows/);
+  });
+});
+
 describe('GitHubService ancillary functions', () => {
   it('finds CodeQL workflow then dispatches scan and fetches user/org info', async () => {
     (global as any).__DISABLE_GITHUB_CACHE__ = true; // ensure deterministic fetch sequence
     GitHubService.clearCache();
     mockFetchSequence([
+      // Pre-flight permission check: list workflows
+      { json: { workflows: [ { id: 321, name: 'CodeQL', path: '.github/workflows/codeql.yml' } ] } },
       // initial findCodeQLWorkflow
       { json: { workflows: [ { id: 321, name: 'CodeQL', path: '.github/workflows/codeql.yml' } ] } },
       // findCodeQLWorkflow again inside dispatchCodeQLScan
