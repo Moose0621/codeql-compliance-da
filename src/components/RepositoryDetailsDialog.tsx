@@ -9,16 +9,21 @@ import { createGitHubService } from '@/lib/github-service';
 import type { Repository, WorkflowRun, SecurityFindings, SarifAnalysis } from '@/types/dashboard';
 import React from 'react';
 
+// Utility function to generate SVG path for trend line
+function generateTrendLinePath(values: number[], max: number): string {
+  return values.map((v, i) => {
+    const x = (i / Math.max(1, values.length - 1)) * 100;
+    const y = 30 - (v / max) * 30;
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(' ');
+}
+
 // Lightweight inline trend line component (no extra lib)
 function TrendLine({ data }: { data: SarifAnalysis[] }) {
   const points = data.slice(-12); // limit
   const values = points.map(p => p.results_count);
   const max = Math.max(1, ...values);
-  const path = values.map((v,i) => {
-    const x = (i/(Math.max(1, values.length-1)))*100;
-    const y = 30 - (v/max)*30;
-    return `${i===0?'M':'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-  }).join(' ');
+  const path = generateTrendLinePath(values, max);
   return (
     <svg viewBox="0 0 100 30" className="w-full h-20">
       <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} vectorEffect="non-scaling-stroke" />
