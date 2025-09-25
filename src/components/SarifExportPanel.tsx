@@ -24,19 +24,26 @@ export function SarifExportPanel({ repositories, token, organization }: SarifExp
     setIsExporting(true);
     try {
       const svc = createGitHubService(token, organization);
-  const entries: Array<{ repository: string; analysis_id: number; commit_sha: string; sarif: import('@/types/dashboard').SarifData | { error: string } }> = [];
-      // Limit to first 50 repos for performance; could paginate later
-      for (const repo of repositories.slice(0,50)) {
-        try {
-          const latest = await svc.getLatestAnalysis(repo.name);
-          if (!latest) { entries.push({ repository: repo.full_name, analysis_id: -1, commit_sha: '', sarif: { error: 'no-analysis' } }); continue; }
-          const sarifData = await svc.getSarifData(repo.name, latest.id);
-          const sarif = validateSarif(sarifData) ? sarifData : { error: 'invalid-sarif' };
-          entries.push({ repository: repo.full_name, analysis_id: latest.id, commit_sha: latest.commit_sha, sarif });
-  } catch {
-          entries.push({ repository: repo.full_name, analysis_id: -1, commit_sha: '', sarif: { error: 'fetch-failed' } });
+      const targets = repositories.slice(0, 50);
+      const entries: Array<{ repository: string; analysis_id: number; commit_sha: string; sarif: import('@/types/dashboard').SarifData | { error: string } }> = [];
+      const concurrency = 6;
+      let index = 0;
+      async function worker() {
+        while (true) {
+          const current = targets[index++];
+          if (!current) break;
+          try {
+            const latest = await svc.getLatestAnalysis(current.name);
+            if (!latest) { entries.push({ repository: current.full_name, analysis_id: -1, commit_sha: '', sarif: { error: 'no-analysis' } }); continue; }
+            const sarifData = await svc.getSarifData(current.name, latest.id);
+            const sarif = validateSarif(sarifData) ? sarifData : { error: 'invalid-sarif' };
+            entries.push({ repository: current.full_name, analysis_id: latest.id, commit_sha: latest.commit_sha, sarif });
+          } catch {
+            entries.push({ repository: current.full_name, analysis_id: -1, commit_sha: '', sarif: { error: 'fetch-failed' } });
+          }
         }
       }
+      await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, () => worker()));
       const payload = buildAggregatedSarifPayload(entries);
       const json = JSON.stringify(payload, null, 2);
       const blob = new Blob([json], { type: 'application/json' });

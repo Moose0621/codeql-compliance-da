@@ -200,13 +200,23 @@ describe('GitHubService SARIF & Default Setup methods', () => {
       { id: 10, ref: 'refs/heads/main', commit_sha: 'abc', analysis_key: 'codeql/js', created_at: new Date().toISOString(), results_count: 5, rules_count: 20, sarif_id: 's1', tool: { name: 'CodeQL' }, deletable: false }
     ];
     mockFetchSequence([
-      { json: analyses }, // getCodeScanningAnalyses
+      { json: analyses }, // first call (explicit list)
+      { json: analyses }, // second call inside getLatestAnalysis
     ]);
     const svc = new GitHubService({ token: 't', organization: 'org' });
     const list = await svc.getCodeScanningAnalyses('repo1');
     expect(list.length).toBe(1);
     const latest = await svc.getLatestAnalysis('repo1');
     expect(latest?.id).toBe(10);
+  });
+
+  it('returns empty list when analyses fetch fails', async () => {
+    mockFetchSequence([
+      { ok: false, status: 500, json: { message: 'err' } }
+    ]);
+    const svc = new GitHubService({ token: 't', organization: 'org' });
+    const list = await svc.getCodeScanningAnalyses('repo1');
+    expect(list.length).toBe(0);
   });
 
   it('fetches SARIF data with correct Accept header override', async () => {
