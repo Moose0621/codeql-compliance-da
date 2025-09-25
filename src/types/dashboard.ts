@@ -53,3 +53,30 @@ export interface CodeQLAlert {
   created_at: string;
   updated_at: string;
 }
+
+export interface ComplianceReport {
+  id: string;
+  generated_at: string;
+  generated_by: string;
+  report_period: {
+    start_date: string;
+    end_date: string;
+  };
+  organization: string;
+  repositories: Repository[];
+  summary: {
+    total_repositories: number;
+    repositories_with_findings: number;
+    total_findings: SecurityFindings;
+    compliance_status: 'compliant' | 'non-compliant' | 'partial';
+    last_scan_coverage: number; // percentage
+  };
+  fedramp_requirements: {
+    scan_frequency_met: boolean;
+    response_time_met: boolean;
+    documentation_complete: boolean;
+    remediation_tracked: boolean;
+  };
+}
+
+export type ExportFormat = 'pdf' | 'csv' | 'json' | 'xlsx';

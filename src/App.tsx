@@ -8,10 +8,13 @@ import { Toaster } from "@/components/ui/sonner";
 import { RepositoryCard } from "@/components/RepositoryCard";
 import { SecurityChart } from "@/components/SecurityChart";
 import { AuditTrail } from "@/components/AuditTrail";
-import { Shield, ArrowClockwise, Activity, FileText, Warning } from "@phosphor-icons/react";
+import { ExportDialog } from "@/components/ExportDialog";
+import { QuickExport } from "@/components/QuickExport";
+import { ExportStatus } from "@/components/ExportStatus";
+import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { useKV } from '@github/spark/hooks';
-import type { Repository, ScanRequest } from "@/types/dashboard";
+import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/types/dashboard";
 
 // Mock data for demo purposes
 const mockRepositories: Repository[] = [
@@ -86,6 +89,7 @@ const mockRepositories: Repository[] = [
 function App() {
   const [repositories, setRepositories] = useState<Repository[]>(mockRepositories);
   const [scanRequests, setScanRequests] = useKV<ScanRequest[]>("scan-requests", []);
+  const [exportHistory, setExportHistory] = useKV<Array<{id: string, format: ExportFormat, timestamp: string}>>("export-history", []);
   const [isLoading, setIsLoading] = useState(false);
   const [scanningRepos, setScanningRepos] = useState<Set<number>>(new Set());
 
@@ -193,6 +197,17 @@ function App() {
     toast.info(`Viewing details for ${repository.name}`);
   };
 
+  const handleExportReport = (format: ExportFormat, report: ComplianceReport) => {
+    const exportEntry = {
+      id: report.id,
+      format,
+      timestamp: new Date().toISOString()
+    };
+    
+    setExportHistory(prev => [exportEntry, ...(prev || []).slice(0, 9)]); // Keep last 10 exports
+    toast.success(`Compliance report exported as ${format.toUpperCase()}`);
+  };
+
   const getOverallStats = () => {
     const totalRepos = repositories.length;
     const activeScans = repositories.filter(r => r.last_scan_status === 'in_progress').length;
@@ -224,15 +239,20 @@ function App() {
             </div>
           </div>
           
-          <Button
-            onClick={handleRefreshRepositories}
-            disabled={isLoading}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <ArrowClockwise size={16} className={isLoading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-3">
+            <ExportStatus exportHistory={exportHistory || []} />
+            <QuickExport repositories={repositories} />
+            <ExportDialog repositories={repositories} onExport={handleExportReport} />
+            <Button
+              onClick={handleRefreshRepositories}
+              disabled={isLoading}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <ArrowClockwise size={16} className={isLoading ? 'animate-spin' : ''} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -293,10 +313,11 @@ function App() {
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="repositories" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="repositories">Repositories</TabsTrigger>
             <TabsTrigger value="analytics">Security Analytics</TabsTrigger>
             <TabsTrigger value="audit">Audit Trail</TabsTrigger>
+            <TabsTrigger value="exports">Export History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="repositories" className="space-y-6">
@@ -323,6 +344,54 @@ function App() {
 
           <TabsContent value="audit" className="space-y-6">
             <AuditTrail scanRequests={scanRequests || []} />
+          </TabsContent>
+
+          <TabsContent value="exports" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText size={20} />
+                  Export History
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Recent compliance report exports and downloads
+                </p>
+              </CardHeader>
+              <CardContent>
+                {exportHistory && exportHistory.length > 0 ? (
+                  <div className="space-y-3">
+                    {exportHistory.map((export_item, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-primary/10 rounded">
+                            {export_item.format === 'pdf' && <FileText size={16} className="text-primary" />}
+                            {export_item.format === 'csv' && <Table size={16} className="text-primary" />}
+                            {export_item.format === 'json' && <Code size={16} className="text-primary" />}
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {export_item.format.toUpperCase()} Compliance Report
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Exported {new Date(export_item.timestamp).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="outline">
+                          {export_item.format.toUpperCase()}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FileText size={48} className="mx-auto mb-4 opacity-50" />
+                    <p>No exports yet</p>
+                    <p className="text-sm">Use the Export Report button to generate your first compliance report</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
