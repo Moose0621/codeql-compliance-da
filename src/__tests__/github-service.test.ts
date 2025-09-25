@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { GitHubService } from '@/lib/github-service';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Helper to build mock fetch responses
 function mockFetchSequence(responses: Array<{ ok?: boolean; status?: number; statusText?: string; json?: any }>) {
@@ -91,5 +92,36 @@ describe('GitHubService ancillary functions', () => {
     expect(user.login).toBe('tester');
     const org = await svc.getOrganizationInfo();
     expect(org.login).toBe('org');
+  });
+});
+
+describe('GitHubService caching & error handling', () => {
+  beforeEach(() => {
+    GitHubService.clearCache();
+    delete (globalThis as any).__DISABLE_GITHUB_CACHE__;
+  });
+
+  it('caches GET responses (single fetch for repeated user info)', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, statusText: 'OK', json: async () => ({ login: 'cached' }), text: async () => '{}', headers: { get: () => null } }));
+    (global as any).fetch = fetchMock;
+    const svc = new GitHubService({ token: 't', organization: 'org' });
+    const first = await svc.getUserInfo();
+    const second = await svc.getUserInfo();
+    expect(first.login).toBe('cached');
+    expect(second.login).toBe('cached');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws enriched error message on 403 rate limit response', async () => {
+    (global as any).fetch = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      json: async () => ({}),
+      text: async () => 'rate limit exceeded for requests',
+      headers: { get: (h: string) => (h === 'X-RateLimit-Remaining' ? '0' : h === 'X-RateLimit-Limit' ? '60' : h === 'X-RateLimit-Reset' ? String(Math.floor(Date.now()/1000)+1) : null) }
+    }));
+    const svc = new GitHubService({ token: 't', organization: 'org' });
+    await expect(svc.getUserInfo()).rejects.toThrow(/403/);
   });
 });
