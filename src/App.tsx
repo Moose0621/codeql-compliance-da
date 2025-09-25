@@ -12,13 +12,16 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { QuickExport } from "@/components/QuickExport";
 import { ExportStatus } from "@/components/ExportStatus";
 import { GitHubConnection } from "@/components/GitHubConnection";
-import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle } from "@phosphor-icons/react";
+import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
 import { toast } from "sonner";
 // Replaced Spark KV with localStorage persistence
 import { usePersistentConfig } from '@/hooks/usePersistentConfig';
 import { getEnvConfig } from '@/lib/env-config';
 import { createGitHubService } from '@/lib/github-service';
 import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/types/dashboard";
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { RepositoryDetailsDialog } from '@/components/RepositoryDetailsDialog';
+import { Input } from '@/components/ui/input';
 
 interface GitHubConfig {
   token: string;
@@ -47,6 +50,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [scanningRepos, setScanningRepos] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState("setup");
+  const [detailsRepo, setDetailsRepo] = useState<Repository | null>(null);
+  const [search, setSearch] = useState("");
+  const [severityFilter, setSeverityFilter] = useState<string | null>(null);
 
   // Load repositories when GitHub connection is established or restored
   useEffect(() => {
@@ -215,7 +221,7 @@ function App() {
   };
 
   const handleViewDetails = (repository: Repository) => {
-    toast.info(`Viewing details for ${repository.name}`);
+    setDetailsRepo(repository);
   };
 
   const handleExportReport = (format: ExportFormat, report: ComplianceReport) => {
@@ -243,6 +249,30 @@ function App() {
   };
 
   const stats = useMemo(getOverallStats, [repositories]);
+
+  const filteredRepositories = useMemo(() => {
+    let list = repositories;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(r => r.name.toLowerCase().includes(q) || r.full_name.toLowerCase().includes(q));
+    }
+    if (severityFilter) {
+      list = list.filter(r => {
+        const f = r.security_findings;
+        if (!f) return severityFilter === 'none';
+        switch (severityFilter) {
+          case 'critical': return f.critical > 0;
+          case 'high': return f.high > 0;
+          case 'medium': return f.medium > 0;
+          case 'low': return f.low > 0;
+          case 'note': return f.note > 0;
+          case 'none': return f.total === 0;
+          default: return true;
+        }
+      });
+    }
+    return list;
+  }, [repositories, search, severityFilter]);
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -281,6 +311,7 @@ function App() {
                 <ExportDialog repositories={repositories} onExport={handleExportReport} />
               </>
             )}
+            <ThemeToggle />
             <Button
               onClick={handleRefreshRepositories}
               disabled={isLoading || !githubConfig?.isConnected}
@@ -414,17 +445,41 @@ function App() {
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {repositories.map(repository => (
-                  <RepositoryCard
-                    key={repository.id}
-                    repository={repository}
-                    onDispatchScan={handleDispatchScan}
-                    onViewDetails={handleViewDetails}
-                    isScanning={scanningRepos.has(repository.id)}
-                  />
+              <>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex items-center gap-2 flex-1">
+                      <MagnifyingGlass size={16} className="text-muted-foreground" />
+                      <Input placeholder="Search repositories" value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {['critical','high','medium','low','note','none'].map(s => (
+                        <Badge
+                          key={s}
+                          onClick={() => setSeverityFilter(prev => prev === s ? null : s)}
+                          className={`cursor-pointer select-none ${severityFilter === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                        >{s}</Badge>
+                      ))}
+                      {severityFilter && (
+                        <Button variant="ghost" size="sm" onClick={() => setSeverityFilter(null)}>Clear</Button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1"><FunnelSimple size={14} /> Showing {filteredRepositories.length} of {repositories.length}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredRepositories.map((repository, idx) => (
+                  <div key={repository.id} style={{ animationDelay: `${idx * 40}ms` }} className="animate-fade-in [animation-fill-mode:both]">
+                    <RepositoryCard
+                      repository={repository}
+                      onDispatchScan={handleDispatchScan}
+                      onViewDetails={handleViewDetails}
+                      isScanning={scanningRepos.has(repository.id)}
+                    />
+                  </div>
                 ))}
-              </div>
+                </div>
+              </>
             )}
           </TabsContent>
 
@@ -489,6 +544,13 @@ function App() {
           </TabsContent>
         </Tabs>
       </div>
+      <RepositoryDetailsDialog
+        open={!!detailsRepo}
+        onOpenChange={(o) => !o && setDetailsRepo(null)}
+        repository={detailsRepo}
+        token={githubConfig?.token || ''}
+        organization={githubConfig?.organization || ''}
+      />
     </div>
   );
 }
