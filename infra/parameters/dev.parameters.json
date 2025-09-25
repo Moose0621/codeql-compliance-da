@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "dev"
+    },
+    "location": {
+      "value": "East US 2"
+    },
+    "appName": {
+      "value": "codeql-compliance"
+    },
+    "appServicePlanSku": {
+      "value": "B1"
+    },
+    "githubRepo": {
+      "value": "https://github.com/Moose0621/codeql-compliance-da"
+    },
+    "githubBranch": {
+      "value": "main"
+    }
+  }
+}

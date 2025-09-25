@@ -11,6 +11,9 @@
         "typecheck": "tsc --noEmit --pretty false",
         "test": "vitest run --coverage --reporter=default",
         "test:watch": "vitest",
+        "test:e2e": "playwright test",
+        "test:e2e:ui": "playwright test --ui",
+        "test:e2e:headed": "playwright test --headed",
         "optimize": "vite optimize",
         "preview": "vite preview"
     },
@@ -79,6 +82,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^9.21.0",
+        "@playwright/test": "^1.48.0",
         "@rollup/rollup-darwin-arm64": "^4.24.0",
         "@tailwindcss/postcss": "^4.1.8",
         "@types/react": "^19.0.10",

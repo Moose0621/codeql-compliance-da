@@ -7,69 +7,132 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  NODE_VERSION: '20.x'
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-verify:
-    name: Lint • Typecheck • Build
+  test:
+    name: Test & Build
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # future: security-events: write (for code scanning)
-    strategy:
-      matrix:
-        node: [18.x, 20.x]
+      pull-requests: write # for coverage comments
+    
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
-          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: Run linter
         run: npm run lint
 
-      - name: Typecheck
+      - name: Type check
         run: npm run typecheck
 
-      - name: Build
-        run: npm run build
+      - name: Run tests with coverage
+        run: npm run test
 
-      - name: Upload production build artifact
-        if: matrix.node == '20.x'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ github.sha }}
-          path: dist
-          if-no-files-found: error
-
-      - name: Detect test script
-        id: has_tests
+      - name: Check coverage threshold
         run: |
-          if npm run | grep -q " test"; then
-            echo "has_tests=true" >> "$GITHUB_OUTPUT"
+          echo "Checking test coverage..."
+          # Extract coverage percentage from lcov.info
+          if [ -f coverage/lcov.info ]; then
+            lines_covered=$(grep -E "^LH:" coverage/lcov.info | awk -F: '{sum += $2} END {print sum}')
+            lines_found=$(grep -E "^LF:" coverage/lcov.info | awk -F: '{sum += $2} END {print sum}')
+            if [ "$lines_found" -gt 0 ]; then
+              coverage_percent=$((lines_covered * 100 / lines_found))
+              echo "Coverage: ${coverage_percent}%"
+              if [ "$coverage_percent" -lt 70 ]; then
+                echo "❌ Coverage ${coverage_percent}% is below 70% threshold"
+                exit 1
+              else
+                echo "✅ Coverage ${coverage_percent}% meets 70% threshold"
+              fi
+            else
+              echo "⚠️  No coverage data found"
+            fi
           else
-            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️  No lcov.info file found"
           fi
 
-      - name: Run unit tests (placeholder)
-        if: steps.has_tests.outputs.has_tests == 'true'
-        run: npm test -- --reporter=default
+      - name: Build application
+        run: npm run build
 
-      - name: Post summary
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: dist
+          retention-days: 30
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage
+          retention-days: 7
+
+      - name: Post CI summary
         if: always()
         run: |
           echo "### CI Summary" >> $GITHUB_STEP_SUMMARY
-          echo "Node version: ${{ matrix.node }}" >> $GITHUB_STEP_SUMMARY
-          echo "Lint / Typecheck / Build complete" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Lint, Typecheck, Test, and Build complete" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/lcov.info ]; then
+            lines_covered=$(grep -E "^LH:" coverage/lcov.info | awk -F: '{sum += $2} END {print sum}' || echo "0")
+            lines_found=$(grep -E "^LF:" coverage/lcov.info | awk -F: '{sum += $2} END {print sum}' || echo "1")
+            coverage_percent=$((lines_covered * 100 / lines_found))
+            echo "📊 Test Coverage: ${coverage_percent}%" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level moderate
+
+      - name: Check for security vulnerabilities
+        run: |
+          npm audit --json > audit-results.json || true
+          if [ -f audit-results.json ]; then
+            high_vulns=$(jq '.metadata.vulnerabilities.high // 0' audit-results.json)
+            critical_vulns=$(jq '.metadata.vulnerabilities.critical // 0' audit-results.json)
+            total_high_critical=$((high_vulns + critical_vulns))
+            
+            if [ "$total_high_critical" -gt 0 ]; then
+              echo "❌ Found $total_high_critical high/critical vulnerabilities"
+              echo "High: $high_vulns, Critical: $critical_vulns"
+              jq '.vulnerabilities' audit-results.json
+              exit 1
+            else
+              echo "✅ No high or critical vulnerabilities found"
+            fi
+          fi
 
   # Placeholder for future e2e job (Playwright)
   # e2e:

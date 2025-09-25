@@ -3,9 +3,75 @@ updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    # Limit number of open PRs to avoid noise
+    open-pull-requests-limit: 10
+    # Use semantic commit messages
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # Group related updates together
+    groups:
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "@rollup/*"
+      radix:
+        patterns:
+          - "@radix-ui/*"
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "playwright"
+          - "@playwright/*"
+      tailwind:
+        patterns:
+          - "tailwind*"
+          - "@tailwindcss/*"
+    # Add labels to PRs for better organization
+    labels:
+      - "dependencies"
+      - "automated"
+    # Review security updates immediately
+    reviewers:
+      - "Moose0621"
+    # Allow auto-merge for dev dependencies with patch/minor updates
+    allow:
+      - dependency-type: "development"
+        update-type: "version-update:semver-patch"
+      - dependency-type: "development" 
+        update-type: "version-update:semver-minor"
 
   - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
+      interval: "monthly"
+    labels:
+      - "devcontainers"
+      - "automated"
+
+  # Monitor GitHub Actions for security updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
       interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+    commit-message:
+      prefix: "chore(actions)"
+      include: "scope"
+    labels:
+      - "github-actions"
+      - "automated"

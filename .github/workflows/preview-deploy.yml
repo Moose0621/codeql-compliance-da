@@ -1,0 +1,105 @@
+name: Preview Deploy
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened, closed ]
+
+env:
+  NODE_VERSION: '20.x'
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write # for Azure OIDC
+
+jobs:
+  deploy-preview:
+    name: Deploy Preview Environment
+    runs-on: ubuntu-latest
+    if: github.event.action != 'closed'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          # Use staging/preview environment variables
+          VITE_GITHUB_TOKEN: ${{ secrets.PREVIEW_GITHUB_TOKEN }}
+          VITE_GITHUB_ORG: ${{ secrets.PREVIEW_GITHUB_ORG }}
+
+      # Note: This action and secrets will be configured during Azure setup
+      # - name: Deploy to Azure Static Web Apps (Preview)
+      #   uses: Azure/static-web-apps-deploy@v1
+      #   with:
+      #     azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+      #     repo_token: ${{ secrets.GITHUB_TOKEN }}
+      #     action: "upload"
+      #     app_location: "."
+      #     output_location: "dist"
+
+      - name: Upload preview build
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-build-${{ github.event.number }}
+          path: dist
+          retention-days: 7
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number;
+            const body = `## 🚀 Preview Deployment
+            
+            Your preview build is ready!
+            
+            - **Build artifact**: Available for download in Actions tab
+            - **PR**: #${prNumber}
+            - **Commit**: ${context.sha.substring(0, 7)}
+            
+            > **Note**: Azure Static Web Apps preview URL will be available once Azure resources are configured.
+            
+            The preview environment uses staging configurations and limited GitHub API access.`;
+            
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  cleanup-preview:
+    name: Cleanup Preview Environment
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+    
+    steps:
+      - name: Cleanup preview resources
+        run: |
+          echo "🧹 Cleaning up preview environment for PR #${{ github.event.number }}"
+          # Future: Clean up Azure preview slot/environment
+          echo "Preview cleanup complete"
+
+      - name: Comment cleanup
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number;
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "🧹 Preview environment cleaned up."
+            });
