@@ -5,17 +5,12 @@
  * actionable error messages when permissions are insufficient.
  */
 
-export interface WorkflowDispatchError extends Error {
-  code: 'MISSING_WORKFLOW' | 'INSUFFICIENT_PERMISSIONS' | 'WORKFLOW_NOT_DISPATCHABLE' | 'UNKNOWN_ERROR';
-  suggestions: string[];
-}
-
 /**
  * Pre-flight check to validate if workflow dispatch is possible
  * @param repo Repository in format "owner/repo"
  * @param token GitHub token
  * @param workflowFile Optional workflow filename to check specifically
- * @throws {WorkflowDispatchError} With specific error code and suggestions
+ * @throws {Error} With specific error message and suggestions
  */
 export async function assertWorkflowDispatchable(repo: string, token: string, workflowFile?: string): Promise<void> {
   const headers = {
@@ -29,33 +24,23 @@ export async function assertWorkflowDispatchable(repo: string, token: string, wo
     const workflowsResponse = await fetch(`https://api.github.com/repos/${repo}/actions/workflows`, { headers });
     
     if (workflowsResponse.status === 403) {
-      const errorBody = await workflowsResponse.text().catch(() => '');
-      const error = new Error('403 listing workflows – token likely missing workflow/actions scope') as WorkflowDispatchError;
-      error.code = 'INSUFFICIENT_PERMISSIONS';
-      error.suggestions = [
-        'Verify your token has the "workflow" scope (classic PAT) or "Actions: Read and write" permission (fine-grained PAT)',
-        'If using an organization token, ensure it\'s authorized for SSO',
-        'Check that repository Actions are enabled in Settings > Actions > General'
-      ];
-      throw error;
+      throw new Error(
+        '403 listing workflows – token likely missing workflow/actions scope. ' +
+        'Verify your token has the "workflow" scope (classic PAT) or "Actions: Read and write" permission (fine-grained PAT). ' +
+        'If using an organization token, ensure it\'s authorized for SSO. ' +
+        'Check that repository Actions are enabled in Settings > Actions > General.'
+      );
     }
 
     if (workflowsResponse.status === 404) {
-      const error = new Error(`Repository ${repo} not found or not accessible`) as WorkflowDispatchError;
-      error.code = 'INSUFFICIENT_PERMISSIONS';
-      error.suggestions = [
-        'Verify the repository name is correct',
-        'Check that your token has access to this repository',
-        'Ensure the repository exists and is not private (unless token has appropriate access)'
-      ];
-      throw error;
+      throw new Error(
+        `Repository ${repo} not found or not accessible. ` +
+        'Verify the repository name is correct and that your token has access to this repository.'
+      );
     }
 
     if (!workflowsResponse.ok) {
-      const error = new Error(`Failed listing workflows (${workflowsResponse.status})`) as WorkflowDispatchError;
-      error.code = 'UNKNOWN_ERROR';
-      error.suggestions = ['Check GitHub API status and try again'];
-      throw error;
+      throw new Error(`Failed listing workflows (${workflowsResponse.status}). Check GitHub API status and try again.`);
     }
 
     const workflowsData = await workflowsResponse.json();
@@ -67,28 +52,21 @@ export async function assertWorkflowDispatchable(repo: string, token: string, wo
       );
 
       if (!targetWorkflow) {
-        const error = new Error(`Workflow ${workflowFile} not found on default branch`) as WorkflowDispatchError;
-        error.code = 'MISSING_WORKFLOW';
-        error.suggestions = [
-          `Ensure the workflow file exists at .github/workflows/${workflowFile}`,
-          'Verify the workflow is committed to the default branch',
-          'Check that the workflow file has valid YAML syntax'
-        ];
-        throw error;
+        throw new Error(
+          `Workflow ${workflowFile} not found on default branch. ` +
+          `Ensure the workflow file exists at .github/workflows/${workflowFile} and is committed to the default branch.`
+        );
       }
     }
 
     // If we get here, basic permissions are sufficient for workflow listing
     // Actual dispatch errors will be handled by the enhanced dispatchWorkflow method
   } catch (error) {
-    if ((error as WorkflowDispatchError).code) {
-      throw error; // Re-throw our typed errors
+    // Handle network or other unexpected errors
+    if (error instanceof Error && (error.message.includes('403') || error.message.includes('404') || error.message.includes('not found'))) {
+      throw error; // Re-throw our specific errors
     }
     
-    // Handle network or other unexpected errors
-    const dispatchError = new Error(`Network error during workflow dispatch check: ${error instanceof Error ? error.message : String(error)}`) as WorkflowDispatchError;
-    dispatchError.code = 'UNKNOWN_ERROR';
-    dispatchError.suggestions = ['Check network connectivity and GitHub API status'];
-    throw dispatchError;
+    throw new Error(`Network error during workflow dispatch check: ${error instanceof Error ? error.message : String(error)}. Check network connectivity and GitHub API status.`);
   }
 }

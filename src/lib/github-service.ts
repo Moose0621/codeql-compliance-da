@@ -1,5 +1,5 @@
 import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert } from '@/types/dashboard';
-import { assertWorkflowDispatchable, type WorkflowDispatchError } from './github-dispatch-check';
+import { assertWorkflowDispatchable } from './github-dispatch-check';
 /**
  * Architectural scalability notes (incremental implementation):
  * 1. Centralized rate limit tracking & adaptive backoff to prevent hard 403s.
@@ -416,11 +416,7 @@ export class GitHubService {
     try {
       await assertWorkflowDispatchable(`${this.config.organization}/${repoName}`, this.config.token);
     } catch (error) {
-      if ((error as WorkflowDispatchError).code === 'INSUFFICIENT_PERMISSIONS') {
-        throw new Error(
-          `Cannot dispatch CodeQL scan: ${error.message}. Suggestions: ${(error as WorkflowDispatchError).suggestions.join('; ')}`
-        );
-      }
+      throw new Error(`Cannot dispatch CodeQL scan: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     const workflowId = await this.findCodeQLWorkflow(repoName);
