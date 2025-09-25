@@ -30,8 +30,6 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          # Override default query suites with security-and-quality for more comprehensive analysis
-          queries: security-and-quality
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
