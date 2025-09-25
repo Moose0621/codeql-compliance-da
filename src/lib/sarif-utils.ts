@@ -10,16 +10,16 @@ export function validateSarif(data: unknown): data is SarifData {
 }
 
 // Compute freshness summary from repositories (uses last_scan_date)
+const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 export function computeFreshnessSummary(repositories: Repository[]): FreshnessSummary {
   const now = Date.now();
   const buckets: FreshnessBuckets = { fresh24h: 0, stale7d: 0, old: 0, never: 0 };
   repositories.forEach(r => {
     if (!r.last_scan_date) { buckets.never++; return; }
-    const ageHrs = (now - new Date(r.last_scan_date).getTime()) / 36e5;
+    const ageHrs = (now - new Date(r.last_scan_date).getTime()) / MILLISECONDS_PER_HOUR;
     if (ageHrs <= 24) buckets.fresh24h++;
     else if (ageHrs <= 24*7) buckets.stale7d++;
     else buckets.old++;
-  });
   // Weight: fresh=1.0, stale=0.6, old=0.2, never=0
   const total = repositories.length || 1;
   const score = ((buckets.fresh24h*1) + (buckets.stale7d*0.6) + (buckets.old*0.2)) / total * 100;
