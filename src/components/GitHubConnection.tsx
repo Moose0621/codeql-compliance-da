@@ -8,7 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GitBranch, Key, Shield, CheckCircle, XCircle, Eye, EyeSlash } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { useKV } from '@github/spark/hooks';
+// Replaced Spark useKV with localStorage-based fallback hook
+import { usePersistentConfig } from '@/hooks/usePersistentConfig';
+
+// Environment-provided configuration (system configuration fallback)
+// Extracted via helper to allow test-time mocking.
+import { getEnvConfig } from '@/lib/env-config';
+const { token: ENV_TOKEN, org: ENV_ORG } = getEnvConfig();
+const ENV_MANAGED = !!(ENV_TOKEN && ENV_ORG);
 
 interface GitHubConfig {
   token: string;
@@ -27,10 +34,13 @@ interface GitHubConnectionProps {
 }
 
 export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) {
-  const [githubConfig, setGithubConfig] = useKV<GitHubConfig>("github-config", {
-    token: "",
-    organization: "",
-    isConnected: false
+  // Initialize from environment if present so users in environments where
+  // the Spark KV store is unreliable still get a working baseline.
+  const [githubConfig, setGithubConfig] = usePersistentConfig<GitHubConfig>("github-config", {
+    token: ENV_TOKEN || "",
+    organization: ENV_ORG || "",
+    isConnected: ENV_MANAGED,
+    lastVerified: ENV_MANAGED ? new Date().toISOString() : undefined
   });
   
   const [tempToken, setTempToken] = useState("");
@@ -61,6 +71,12 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
   }, [githubConfig?.isConnected, githubConfig?.token, githubConfig?.organization, onConnectionChange]);
 
   const verifyConnection = async () => {
+    if (ENV_MANAGED) {
+      // Already managed by env; surface a toast and exit early.
+      toast.success("GitHub connection is managed via environment configuration");
+      return;
+    }
+
     if (!tempToken.trim() || !tempOrg.trim()) {
       toast.error("Please provide both GitHub token and organization name");
       return;
@@ -151,6 +167,10 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
   };
 
   const disconnect = () => {
+    if (ENV_MANAGED) {
+      toast.error("Cannot disconnect an environment-managed configuration. Remove VITE_GITHUB_TOKEN / VITE_GITHUB_ORG from your .env.local to manage via UI.");
+      return;
+    }
     const resetConfig: GitHubConfig = {
       token: "",
       organization: "",
@@ -165,6 +185,9 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
 
   const testPermissions = async () => {
     if (!githubConfig?.token || !githubConfig?.organization) return;
+    if (ENV_MANAGED) {
+      // Environment managed; permissions test still valid.
+    }
 
     try {
       // Test CodeQL alerts access (requires security_events scope)
@@ -206,7 +229,7 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
   };
 
   const testExistingConnection = async () => {
-    if (!githubConfig?.token || !githubConfig?.organization) return;
+  if (!githubConfig?.token || !githubConfig?.organization) return;
 
     setIsVerifying(true);
     try {
@@ -293,6 +316,13 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
                       <br />• <code>repo</code> - Access to repositories
                       <br />• <code>security_events</code> - Read code scanning alerts
                       <br />• <code>actions:read</code> - Read workflow runs and dispatch workflows
+                      {ENV_MANAGED && (
+                        <>
+                          <br />
+                          <strong className="block mt-2">Environment managed</strong>
+                          Token & organization supplied via system config (.env). UI fields are disabled.
+                        </>
+                      )}
                     </AlertDescription>
                   </Alert>
 
@@ -303,16 +333,18 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
                         <Input
                           id="github-token"
                           type={showToken ? "text" : "password"}
-                          placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                          placeholder={ENV_MANAGED ? "(managed by environment)" : "ghp_xxxxxxxxxxxxxxxxxxxx"}
                           value={tempToken}
                           onChange={(e) => setTempToken(e.target.value)}
                           className="pr-10"
+                          disabled={ENV_MANAGED}
                         />
                         <Button
                           variant="ghost"
                           size="sm"
                           className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
                           onClick={() => setShowToken(!showToken)}
+                          disabled={ENV_MANAGED}
                         >
                           {showToken ? <EyeSlash size={16} /> : <Eye size={16} />}
                         </Button>
@@ -324,19 +356,22 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
                       <Input
                         id="github-org"
                         type="text"
-                        placeholder="your-org-name"
+                        placeholder={ENV_MANAGED ? "(managed by environment)" : "your-org-name"}
                         value={tempOrg}
                         onChange={(e) => setTempOrg(e.target.value)}
+                        disabled={ENV_MANAGED}
                       />
                     </div>
 
-                    <Button 
-                      onClick={verifyConnection} 
-                      disabled={isVerifying || !tempToken.trim() || !tempOrg.trim()}
-                      className="w-full"
-                    >
-                      {isVerifying ? "Verifying Connection..." : "Connect to GitHub"}
-                    </Button>
+                    {!ENV_MANAGED && (
+                      <Button 
+                        onClick={verifyConnection} 
+                        disabled={isVerifying || !tempToken.trim() || !tempOrg.trim()}
+                        className="w-full"
+                      >
+                        {isVerifying ? "Verifying Connection..." : "Connect to GitHub"}
+                      </Button>
+                    )}
                   </div>
 
                   {verificationResult && (
@@ -358,6 +393,9 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
                     <CheckCircle size={16} className="text-green-600" />
                     <AlertDescription className="text-green-700">
                       Successfully connected to <strong>{githubConfig.organization}</strong> as <strong>{githubConfig.userInfo?.login}</strong>
+                      {ENV_MANAGED && (
+                        <span className="block mt-1 text-xs opacity-80">(Connection managed via environment variables)</span>
+                      )}
                     </AlertDescription>
                   </Alert>
 
@@ -368,9 +406,11 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
                     <Button variant="outline" onClick={testPermissions}>
                       Check Permissions
                     </Button>
-                    <Button variant="destructive" onClick={disconnect}>
-                      Disconnect
-                    </Button>
+                    {!ENV_MANAGED && (
+                      <Button variant="destructive" onClick={disconnect}>
+                        Disconnect
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}

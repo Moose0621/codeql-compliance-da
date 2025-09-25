@@ -98,6 +98,23 @@ Then you can get the project code:
 
 5. Open your browser to `http://localhost:5173`
 
+### (Optional) System configuration via environment variables
+
+If you prefer not to enter your GitHub token through the UI (or you are running in an environment where the original Spark KV storage hook was unreliable), you can pre-configure the connection using a local environment file. The app now uses a resilient localStorage-backed persistence layer by default, with environment variables as an optional override:
+
+1. Create a file named `.env.local` in the project root (it's already ignored by `.gitignore` via the `*.local` pattern).
+2. Add the following variables (do NOT commit this file):
+
+   ```bash
+   VITE_GITHUB_TOKEN=ghp_your_pat_here
+   VITE_GITHUB_ORG=your-org-name
+   ```
+
+3. Restart the dev server (`npm run dev`). The application will detect these values and mark the GitHub connection as established. The Setup tab will display the connection as “environment managed” and disable manual edits until you remove the variables.
+
+> [!CAUTION]
+> Storing long‑lived PATs in local `.env.local` is convenient but still sensitive. Prefer fine‑scoped tokens and rotate regularly. For production deployments use a secure secret manager rather than embedding values at build time.
+
 ## Run the application
 
 ### Local development
@@ -265,7 +282,7 @@ Built with ❤️ for enterprise security compliance
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### Prerequisites (recap)
 
 - Node.js 18+ and npm/yarn
 - GitHub Personal Access Token with the following scopes:
@@ -306,6 +323,18 @@ Built with ❤️ for enterprise security compliance
    - Organization name
 3. **Verify Connection**: The system will validate permissions and establish connection
 4. **Repository Discovery**: Repositories will be automatically loaded and displayed
+
+#### Environment-managed mode
+
+When `VITE_GITHUB_TOKEN` and `VITE_GITHUB_ORG` are present at build/runtime, the GitHub connection is initialized automatically and UI inputs are disabled. Remove or change the variables and restart the server to switch back to manual entry.
+
+### Storage persistence
+
+The dashboard stores configuration (token metadata, org, timestamps) in `localStorage` under the key `github-config`. Sensitive values (the token itself) are only kept client-side. For production hardening you should:
+
+- Prefer short-lived fine-scoped tokens or GitHub App installations
+- Consider introducing a backend proxy to exchange a short opaque session key for the PAT
+- Rotate tokens regularly and clear `localStorage` on logout events
 
 ## 📱 Usage
 
