@@ -18,18 +18,22 @@ async function globalSetup(config: FullConfig) {
   console.log('📊 Initializing performance baselines...');
   
   // Create test-specific directories if needed
-  const fs = await import('fs');
+  const fs = await import('fs/promises');
   const path = await import('path');
   
   const testResultsDir = path.join(process.cwd(), 'test-results');
   const screenshotsDir = path.join(testResultsDir, 'screenshots');
   
-  if (!fs.existsSync(testResultsDir)) {
-    fs.mkdirSync(testResultsDir, { recursive: true });
+  try {
+    await fs.access(testResultsDir);
+  } catch {
+    await fs.mkdir(testResultsDir, { recursive: true });
   }
   
-  if (!fs.existsSync(screenshotsDir)) {
-    fs.mkdirSync(screenshotsDir, { recursive: true });
+  try {
+    await fs.access(screenshotsDir);
+  } catch {
+    await fs.mkdir(screenshotsDir, { recursive: true });
   }
 
   console.log('✅ Global setup completed');
