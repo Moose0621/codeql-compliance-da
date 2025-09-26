@@ -57,9 +57,9 @@ describe('useRealTimeUpdates', () => {
     mockUseCallback.mockImplementation((fn) => fn);
   });
 
-  test('should provide hook functionality', () => {
+  test('should provide hook functionality', async () => {
     // Test the hook interface without rendering
-    const hookModule = require('@/hooks/useRealTimeUpdates');
+    const hookModule = await import('@/hooks/useRealTimeUpdates');
     expect(typeof hookModule.useRealTimeUpdates).toBe('function');
     expect(typeof hookModule.useRepositoryRealTimeUpdates).toBe('function');
   });
