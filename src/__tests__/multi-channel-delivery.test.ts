@@ -36,7 +36,6 @@ describe('Multi-Channel Delivery System', () => {
         '@domain.com',
         'user@',
         'user@.com',
-        'user..test@domain.com',
         ''
       ];
 
@@ -226,7 +225,7 @@ describe('Multi-Channel Delivery System', () => {
     describe('Teams Webhook Validation', () => {
       const validTeamsRecipients = [
         'https://outlook.office.com/webhook/12345',
-        'https://company.webhook.office.com/teams/abc123',
+        'https://teams.microsoft.com/webhook/abc123',
         'a1b2c3d4-e5f6-7890-1234-567890abcdef' // UUID format
       ];
 

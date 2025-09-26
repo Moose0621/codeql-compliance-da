@@ -55,7 +55,7 @@ export class MockEmailChannel implements NotificationChannel {
 
     return {
       success: true,
-      messageId: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      messageId: `email_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     };
   }
 
@@ -137,7 +137,7 @@ export class MockSlackChannel implements NotificationChannel {
 
     return {
       success: true,
-      messageId: `slack_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      messageId: `slack_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     };
   }
 
@@ -203,13 +203,30 @@ export class MockTeamsChannel implements NotificationChannel {
 
     return {
       success: true,
-      messageId: `teams_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      messageId: `teams_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     };
   }
 
   validateRecipient(recipient: string): boolean {
-    // Validate Teams webhook URL or channel ID format
-    return recipient.includes('outlook.office.com') || /^[a-f0-9-]+$/.test(recipient);
+    // Validate Teams webhook URL with strict domain checking
+    try {
+      const url = new URL(recipient);
+      // Only allow official Microsoft Teams domains
+      const allowedDomains = [
+        'outlook.office.com',
+        'teams.microsoft.com'
+      ];
+      
+      const hostname = url.hostname.toLowerCase();
+      const isValidDomain = allowedDomains.some(domain => 
+        hostname === domain || hostname.endsWith('.' + domain)
+      );
+      
+      return isValidDomain && url.protocol === 'https:';
+    } catch {
+      // If not a valid URL, check if it's a UUID format for channel ID
+      return /^[a-f0-9-]+$/.test(recipient);
+    }
   }
 
   getSupportedFeatures(): ChannelFeatures {
@@ -260,7 +277,7 @@ export class MockInAppChannel implements NotificationChannel {
 
     return {
       success: true,
-      messageId: `inapp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      messageId: `inapp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     };
   }
 
@@ -331,7 +348,7 @@ export class MockWebhookChannel implements NotificationChannel {
 
     return {
       success: true,
-      messageId: `webhook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      messageId: `webhook_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
     };
   }
 

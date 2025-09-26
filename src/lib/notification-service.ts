@@ -22,6 +22,11 @@ import { logInfo, logWarn, logError } from './logger';
 import { v4 as uuidv4 } from 'uuid';
 
 export class EnhancedNotificationService implements NotificationService {
+  // Rate limiting constants - should be configurable in production
+  private static readonly DEFAULT_MAX_HOURLY = 50;
+  private static readonly DEFAULT_MAX_DAILY = 200;
+  private static readonly HOUR_IN_MS = 60 * 60 * 1000;
+
   private channels: Map<DeliveryChannel, NotificationChannel> = new Map();
   private userPreferences: Map<string, UserPreferences> = new Map();
   private notificationRules: Map<string, NotificationRule> = new Map();
@@ -76,11 +81,13 @@ export class EnhancedNotificationService implements NotificationService {
   }
 
   async scheduleNotification(payload: NotificationPayload, scheduledAt: Date): Promise<string> {
-    // In a real implementation, this would use a job scheduler like Bull or Agenda
+    // TODO: In production, this should use a proper job scheduler like Bull, Agenda, or Azure Service Bus
+    // Current implementation using setTimeout will lose scheduled notifications on service restart
     const scheduleId = uuidv4();
     const delay = scheduledAt.getTime() - Date.now();
     
     if (delay > 0) {
+      logWarn(`Using setTimeout for notification scheduling is not production-ready. Consider using a persistent job scheduler.`);
       setTimeout(async () => {
         try {
           const recipients = await this.getRecipientsForNotification(payload);
@@ -261,7 +268,7 @@ export class EnhancedNotificationService implements NotificationService {
     const now = new Date();
     let counters = this.rateLimitCounters.get(key);
     
-    if (!counters || now.getTime() - counters.lastReset.getTime() > 3600000) { // 1 hour
+    if (!counters || now.getTime() - counters.lastReset.getTime() > EnhancedNotificationService.HOUR_IN_MS) { // 1 hour
       counters = { hourly: 0, daily: 0, lastReset: now };
     }
     
@@ -269,9 +276,9 @@ export class EnhancedNotificationService implements NotificationService {
       counters.daily = 0;
     }
 
-    // Default rate limits
-    const maxHourly = 50;
-    const maxDaily = 200;
+    // Default rate limits - should be configurable per user/notification type
+    const maxHourly = EnhancedNotificationService.DEFAULT_MAX_HOURLY;
+    const maxDaily = EnhancedNotificationService.DEFAULT_MAX_DAILY;
     
     if (counters.hourly >= maxHourly || counters.daily >= maxDaily) {
       return false;
@@ -318,13 +325,16 @@ export class EnhancedNotificationService implements NotificationService {
   }
 
   private async getRecipientsForNotification(payload: NotificationPayload): Promise<string[]> {
-    // In a real implementation, this would determine recipients based on rules
-    // For now, return a default list
+    // TODO: In a real implementation, this would determine recipients based on notification rules
+    // This is a placeholder that should be replaced with actual recipient logic
+    logWarn('getRecipientsForNotification using placeholder implementation');
     return ['admin@example.com'];
   }
 
   private async getChannelsForNotification(payload: NotificationPayload): Promise<DeliveryChannel[]> {
-    // In a real implementation, this would determine channels based on rules
+    // TODO: In a real implementation, this would determine channels based on notification rules
+    // This is a placeholder that should be replaced with actual channel determination logic
+    logWarn('getChannelsForNotification using placeholder implementation');
     return ['email', 'in_app'];
   }
 
