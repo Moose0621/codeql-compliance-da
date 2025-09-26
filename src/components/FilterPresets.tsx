@@ -121,7 +121,7 @@ export function FilterPresets({ onApplyPreset }: FilterPresetsProps) {
   };
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-6" data-testid="filter-presets">
       <CardHeader className="pb-4">
         <CardTitle className="text-lg">Filter Presets</CardTitle>
         <p className="text-sm text-muted-foreground">
@@ -137,6 +137,7 @@ export function FilterPresets({ onApplyPreset }: FilterPresetsProps) {
               variant="outline"
               className="h-auto p-4 flex flex-col items-start gap-2 hover:bg-muted/50 transition-colors"
               onClick={() => handleApplyPreset(preset)}
+              data-testid={`filter-preset-${preset.id}`}
             >
               <div className="flex items-center gap-2 w-full">
                 {getPresetIcon(preset.icon || 'Shield')}
