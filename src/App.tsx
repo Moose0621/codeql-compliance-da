@@ -15,10 +15,13 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { QuickExport } from "@/components/QuickExport";
 import { ExportStatus } from "@/components/ExportStatus";
 import { GitHubConnection } from "@/components/GitHubConnection";
+import { AdvancedFilters } from "@/components/AdvancedFilters";
+import { FilterPresets } from "@/components/FilterPresets";
 import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
 import { toast } from "sonner";
 // Replaced Spark KV with localStorage persistence
 import { usePersistentConfig } from '@/hooks/usePersistentConfig';
+import { useAdvancedSearch } from '@/hooks/useAdvancedSearch';
 import { getEnvConfig } from '@/lib/env-config';
 import { createGitHubService } from '@/lib/github-service';
 import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/types/dashboard";
@@ -56,11 +59,18 @@ function App() {
   const [refreshingRepos, setRefreshingRepos] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState("setup");
   const [detailsRepo, setDetailsRepo] = useState<Repository | null>(null);
-  const [search, setSearch] = useState("");
-  const [severityFilter, setSeverityFilter] = useState<string | null>(null);
-  const [showResultsOnly, setShowResultsOnly] = useState(true); // Default to showing only repos with results
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 30;
+
+  // Advanced search hook replaces individual filter states
+  const {
+    filterState,
+    filteredRepositories,
+    availableOptions,
+    updateFilters,
+    clearFilters,
+    getShareableURL
+  } = useAdvancedSearch(repositories);
 
   // Load repositories when GitHub connection is established or restored
   useEffect(() => {
@@ -286,67 +296,6 @@ function App() {
 
   const stats = useMemo(getOverallStats, [repositories]);
 
-  // Helper function to check if repository has scan results
-  const hasResults = (repo: Repository): boolean => {
-    return !!(repo.security_findings && repo.security_findings.total > 0);
-  };
-
-  const filteredRepositories = useMemo(() => {
-    let list = repositories;
-    
-    // Filter by search term
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(r => r.name.toLowerCase().includes(q) || r.full_name.toLowerCase().includes(q));
-    }
-    
-    // Filter by scan results if enabled
-    if (showResultsOnly) {
-      list = list.filter(r => hasResults(r));
-    }
-    
-    // Filter by severity
-    if (severityFilter) {
-      list = list.filter(r => {
-        const f = r.security_findings;
-        if (!f) return severityFilter === 'none';
-        switch (severityFilter) {
-          case 'critical': return f.critical > 0;
-          case 'high': return f.high > 0;
-          case 'medium': return f.medium > 0;
-          case 'low': return f.low > 0;
-          case 'note': return f.note > 0;
-          case 'none': return f.total === 0;
-          default: return true;
-        }
-      });
-    }
-    return list;
-  }, [repositories, search, severityFilter, showResultsOnly]);
-
-  // Persist filters
-  useEffect(() => {
-    try {
-      localStorage.setItem('repo-filters', JSON.stringify({ search, severityFilter, showResultsOnly }));
-    } catch {
-      // Ignore localStorage errors (e.g., storage quota exceeded)
-    }
-  }, [search, severityFilter, showResultsOnly]);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('repo-filters');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if ('search' in parsed) setSearch(parsed.search);
-        if ('severityFilter' in parsed) setSeverityFilter(parsed.severityFilter);
-        if (typeof parsed.showResultsOnly === 'boolean') setShowResultsOnly(parsed.showResultsOnly);
-      }
-    } catch {
-      // Ignore localStorage errors (e.g., invalid JSON)
-    }
-    // run only once
-  }, []);
-
   const canLoadMore = repositories.length >= page * PAGE_SIZE; // heuristic
   const loadMore = async () => {
     const nextPage = page + 1;
@@ -526,39 +475,20 @@ function App() {
               </div>
             ) : (
               <>
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="flex items-center gap-2 flex-1">
-                      <MagnifyingGlass size={16} className="text-muted-foreground" />
-                      <Input placeholder="Search repositories" value={search} onChange={e => setSearch(e.target.value)} />
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <Toggle
-                          pressed={showResultsOnly}
-                          onPressedChange={setShowResultsOnly}
-                          aria-label="Toggle results filter"
-                          className="text-sm"
-                        >
-                          Results only
-                        </Toggle>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {['critical','high','medium','low','note','none'].map(s => (
-                          <Badge
-                            key={s}
-                            onClick={() => setSeverityFilter(prev => prev === s ? null : s)}
-                            className={`cursor-pointer select-none ${severityFilter === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                          >{s}</Badge>
-                        ))}
-                        {severityFilter && (
-                          <Button variant="ghost" size="sm" onClick={() => setSeverityFilter(null)}>Clear</Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1"><FunnelSimple size={14} /> Showing {filteredRepositories.length} of {repositories.length}</p>
-                </div>
+                {/* Filter Presets */}
+                <FilterPresets onApplyPreset={updateFilters} />
+                
+                {/* Advanced Filters */}
+                <AdvancedFilters
+                  filterState={filterState}
+                  availableOptions={availableOptions}
+                  onFilterChange={updateFilters}
+                  onClearFilters={clearFilters}
+                  onGetShareableURL={getShareableURL}
+                  resultsCount={filteredRepositories.length}
+                  totalCount={repositories.length}
+                />
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredRepositories.map((repository, idx) => {
                     const scanHistory = scanRequests.filter(s => s.repository === repository.full_name)
