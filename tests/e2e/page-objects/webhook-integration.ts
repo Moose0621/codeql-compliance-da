@@ -59,7 +59,8 @@ export class WebhookIntegrationPage {
     return await this.page.evaluate(() => {
       // Check if CSP headers allow WebSocket connections
       const metaTags = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
-      for (const tag of metaTags) {
+      for (let i = 0; i < metaTags.length; i++) {
+        const tag = metaTags[i];
         const content = tag.getAttribute('content') || '';
         if (content.includes('connect-src') && !content.includes('ws:') && !content.includes('wss:')) {
           return false;

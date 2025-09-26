@@ -1,5 +1,5 @@
 import { createHash, createHmac } from 'crypto';
-import http from 'http';
+import * as http from 'http';
 
 export interface WebhookEvent {
   eventType: string;

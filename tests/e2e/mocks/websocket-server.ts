@@ -1,4 +1,4 @@
-import WebSocket from 'ws';
+import * as WebSocket from 'ws';
 
 export interface WebSocketMessage {
   type: string;
@@ -143,7 +143,7 @@ export class MockWebSocketServer {
     ws.send(JSON.stringify(welcomeMessage));
 
     // Handle messages from client
-    ws.on('message', (data) => {
+    ws.on('message', (data: WebSocket.RawData) => {
       this.handleClientMessage(ws, data);
     });
 
@@ -166,7 +166,7 @@ export class MockWebSocketServer {
   /**
    * Handle incoming messages from clients
    */
-  private handleClientMessage(ws: WebSocket, data: Buffer | string): void {
+  private handleClientMessage(ws: WebSocket, data: WebSocket.RawData): void {
     try {
       const message = JSON.parse(data.toString());
       const wsMessage: WebSocketMessage = {
