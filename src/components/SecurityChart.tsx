@@ -48,27 +48,29 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
         </CardHeader>
         <CardContent>
           {aggregateFindings.total > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label={`Security findings pie chart showing ${aggregateFindings.total} total findings: ${aggregateFindings.critical} critical, ${aggregateFindings.high} high, ${aggregateFindings.medium} medium, ${aggregateFindings.low} low, ${aggregateFindings.note} notes`}>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-[200px] text-muted-foreground">
+            <div className="flex items-center justify-center h-[200px] text-muted-foreground" role="status" aria-label="No security findings to display">
               No security findings
             </div>
           )}
@@ -80,14 +82,16 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
           <CardTitle className="text-lg font-semibold">Finding Counts</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData}>
-              <XAxis dataKey="severity" />
-              <YAxis />
-              <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div role="img" aria-label={`Security findings bar chart showing counts by severity: Critical ${aggregateFindings.critical}, High ${aggregateFindings.high}, Medium ${aggregateFindings.medium}, Low ${aggregateFindings.low}, Notes ${aggregateFindings.note}`}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={barData}>
+                <XAxis dataKey="severity" />
+                <YAxis />
+                <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
     </div>
