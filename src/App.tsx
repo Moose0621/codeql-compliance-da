@@ -15,15 +15,18 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { QuickExport } from "@/components/QuickExport";
 import { ExportStatus } from "@/components/ExportStatus";
 import { GitHubConnection } from "@/components/GitHubConnection";
-import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
+import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, FunnelSimple, MagnifyingGlass, Bell } from "@phosphor-icons/react";
 import { toast } from "sonner";
 // Replaced Spark KV with localStorage persistence
 import { usePersistentConfig } from '@/hooks/usePersistentConfig';
+import { useNotifications } from '@/hooks/useNotifications';
 import { getEnvConfig } from '@/lib/env-config';
 import { createGitHubService } from '@/lib/github-service';
+import { notificationService } from '@/lib/notification-service';
 import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/types/dashboard";
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RepositoryDetailsDialog } from '@/components/RepositoryDetailsDialog';
+import { NotificationCenter } from '@/components/NotificationCenter';
 import { Input } from '@/components/ui/input';
 import { Toggle } from '@/components/ui/toggle';
 
@@ -61,6 +64,9 @@ function App() {
   const [showResultsOnly, setShowResultsOnly] = useState(true); // Default to showing only repos with results
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 30;
+
+  // Notification system hook
+  const { unreadCount, hasUnread } = useNotifications();
 
   // Load repositories when GitHub connection is established or restored
   useEffect(() => {
@@ -201,6 +207,22 @@ function App() {
             ));
 
             toast.success(`CodeQL scan completed for ${repository.name}`);
+            
+            // Create notification for scan completion
+            await notificationService.createScanCompleteNotification(
+              repository,
+              latestRun.conclusion === 'success',
+              completedRequest.duration ? completedRequest.duration * 60 * 1000 : undefined // Convert to milliseconds
+            );
+
+            // Create security alert notification if there are findings
+            if (latestRun.conclusion === 'success' && securityFindings) {
+              await notificationService.createSecurityAlert(
+                repository,
+                securityFindings,
+                { workflowRunId: latestRun.id }
+              );
+            }
           }
         } catch (error) {
           console.error('Failed to check scan completion:', error);
@@ -248,6 +270,11 @@ function App() {
         last_scan_status: analysis.latestAnalysis ? 'success' : r.last_scan_status
       } : r));
       toast.success(`Refreshed results for ${repository.name}`);
+      
+      // Create security alert notification for refreshed findings if there are any
+      if (findings.total > 0) {
+        await notificationService.createSecurityAlert(repository, findings);
+      }
     } catch (e) {
       console.warn('Refresh failed', e);
       toast.error(`Failed to refresh ${repository.name}`);
@@ -465,12 +492,21 @@ function App() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="setup">Setup</TabsTrigger>
             <TabsTrigger value="repositories" disabled={!githubConfig?.isConnected}>Repositories</TabsTrigger>
             <TabsTrigger value="analytics" disabled={!githubConfig?.isConnected}>Security Analytics</TabsTrigger>
             <TabsTrigger value="audit" disabled={!githubConfig?.isConnected}>Audit Trail</TabsTrigger>
             <TabsTrigger value="exports" disabled={!githubConfig?.isConnected}>Export History</TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell size={16} />
+              Notifications
+              {hasUnread && (
+                <Badge variant="destructive" className="ml-1 h-4 min-w-4 text-xs">
+                  {unreadCount}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="setup" className="space-y-6">
@@ -657,6 +693,12 @@ function App() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications" className="space-y-6">
+            <div className="max-w-4xl">
+              <NotificationCenter maxHeight="600px" />
+            </div>
           </TabsContent>
         </Tabs>
       </div>

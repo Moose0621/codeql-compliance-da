@@ -317,3 +317,77 @@ export interface FreshnessSummary {
 }
 
 export type ExportFormat = 'pdf' | 'html' | 'csv' | 'json' | 'xlsx';
+
+// Notification System Types
+export interface Notification {
+  id: string;
+  type: 'security_alert' | 'scan_complete' | 'compliance_warning' | 'system_update';
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  title: string;
+  message: string;
+  repository?: string;
+  timestamp: string;
+  read: boolean;
+  actions?: NotificationAction[];
+  metadata?: {
+    scanId?: string;
+    findingCount?: number;
+    repositoryId?: number;
+    workflowRunId?: number;
+  };
+}
+
+export interface NotificationAction {
+  label: string;
+  action: 'dismiss' | 'view_details' | 'mark_read' | 'export_report' | 'refresh_scan';
+  url?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface NotificationPreferences {
+  channels: {
+    toast: boolean;
+    desktop: boolean;
+    email: boolean;
+  };
+  categories: {
+    security_alert: {
+      enabled: boolean;
+      minSeverity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+      channels: ('toast' | 'desktop' | 'email')[];
+    };
+    scan_complete: {
+      enabled: boolean;
+      channels: ('toast' | 'desktop' | 'email')[];
+    };
+    compliance_warning: {
+      enabled: boolean;
+      minSeverity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+      channels: ('toast' | 'desktop' | 'email')[];
+    };
+    system_update: {
+      enabled: boolean;
+      channels: ('toast' | 'desktop' | 'email')[];
+    };
+  };
+  email: {
+    address?: string;
+    enabled: boolean;
+  };
+  desktop: {
+    enabled: boolean;
+    permissionGranted: boolean;
+  };
+  quietHours: {
+    enabled: boolean;
+    startTime: string; // HH:MM format
+    endTime: string;   // HH:MM format
+  };
+}
+
+export interface NotificationHistory {
+  notifications: Notification[];
+  unreadCount: number;
+  lastCleanup: string;
+  preferences: NotificationPreferences;
+}
