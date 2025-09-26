@@ -317,3 +317,64 @@ export interface FreshnessSummary {
 }
 
 export type ExportFormat = 'pdf' | 'html' | 'csv' | 'json' | 'xlsx';
+
+// Webhook-related types
+export interface GitHubWorkflowEvent {
+  action: 'completed' | 'requested' | 'in_progress';
+  workflow_run: {
+    id: number;
+    name: string;
+    html_url: string;
+    status: 'completed' | 'in_progress' | 'queued';
+    conclusion: 'success' | 'failure' | 'cancelled' | 'timed_out' | 'action_required' | 'neutral' | 'skipped' | null;
+    created_at: string;
+    updated_at: string;
+    repository: {
+      id: number;
+      name: string;
+      full_name: string;
+    };
+    head_branch: string;
+    head_sha: string;
+    path: string;
+    run_number: number;
+    event: string;
+  };
+  repository: {
+    id: number;
+    name: string;
+    full_name: string;
+    owner: {
+      login: string;
+      avatar_url: string;
+    };
+    default_branch: string;
+  };
+  organization?: {
+    login: string;
+  };
+}
+
+export interface WebhookNotification {
+  id: string;
+  type: 'scan_completed' | 'scan_failed' | 'critical_finding' | 'connection_status';
+  title: string;
+  message: string;
+  timestamp: string;
+  repository?: string;
+  severity?: 'info' | 'warning' | 'error' | 'success';
+  data?: Record<string, unknown>;
+  read?: boolean;
+}
+
+export interface RealtimeUpdate {
+  type: 'repository_status' | 'scan_completion' | 'notification';
+  timestamp: string;
+  data: {
+    repositoryId?: number;
+    status?: Repository['last_scan_status'];
+    scanRequest?: Partial<ScanRequest>;
+    findings?: SecurityFindings;
+    notification?: WebhookNotification;
+  };
+}
