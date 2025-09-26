@@ -41,6 +41,60 @@ export interface WorkflowRun {
   html_url: string;
 }
 
+// GitHub API Response interfaces for proper typing
+export interface Workflow {
+  id: number;
+  name: string;
+  path: string;
+  state: string;
+}
+
+export interface GitHubWorkflowsResponse {
+  workflows: Workflow[];
+}
+
+export interface GitHubWorkflowRunsResponse {
+  workflow_runs: GitHubWorkflowRun[];
+}
+
+export interface GitHubWorkflowRun {
+  id: number;
+  name: string;
+  path: string;
+  status: string | null;
+  conclusion: string | null;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+}
+
+export interface GitHubRepository {
+  id: number;
+  name: string;
+  full_name: string;
+  owner: {
+    login: string;
+    avatar_url: string;
+  };
+  default_branch: string;
+}
+
+export interface GitHubUserInfo {
+  login: string;
+  id: number;
+  avatar_url: string;
+  name: string;
+  email: string;
+}
+
+export interface GitHubOrganizationInfo {
+  login: string;
+  id: number;
+  avatar_url: string;
+  name: string;
+  description: string;
+}
+
 export interface CodeQLAlert {
   number: number;
   state: 'open' | 'dismissed' | 'fixed' | null;

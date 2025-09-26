@@ -216,6 +216,53 @@ The application integrates with several GitHub APIs:
 - **Code Scanning API**: Security alert retrieval and analysis
 - **Repository API**: Workflow file detection and validation
 
+### Default vs Advanced CodeQL Setup & On-Demand Scanning
+
+This dashboard supports both GitHub's **Default Setup** and **Advanced Setup** configurations for CodeQL:
+
+#### Default Setup
+- **Automatic Configuration**: GitHub automatically configures CodeQL analysis with sensible defaults
+- **Limited Customization**: Cannot customize query suites, languages, or scheduling
+- **No On-Demand Scanning**: Does not support `workflow_dispatch` triggers for manual scan initiation
+- **Best For**: Quick setup with minimal configuration requirements
+
+#### Advanced Setup
+- **Full Control**: Custom workflow files (`.github/workflows/codeql.yml`) with complete configuration control
+- **Customizable**: Select specific languages, query suites, and scan scheduling
+- **On-Demand Support**: Supports `workflow_dispatch` triggers enabling manual scan requests via this dashboard
+- **Best For**: Organizations requiring compliance auditing and on-demand scanning capabilities
+
+#### Security Considerations
+
+**Current Implementation (Client PAT)**:
+- Uses Personal Access Tokens stored in browser local storage
+- Direct client-side API calls to GitHub
+- **Risk**: Token exposure in client-side code and storage
+
+**Planned Migration (GitHub App + Azure Functions)**:
+- Implement GitHub App authentication with restricted permissions
+- Server-side token exchange via Azure Functions
+- Short-lived installation access tokens (1-hour expiry)
+- Enhanced security with organization-level control
+- **Benefit**: Eliminates client-side token storage and reduces attack surface
+
+> [!WARNING]
+> **Security Notice**: The current Personal Access Token approach is suitable for development and internal use. For production deployments, migrate to the GitHub App + Azure Functions architecture to meet enterprise security standards.
+
+#### Repository Compatibility
+
+| Setup Type | SARIF Retrieval | On-Demand Scanning | Dashboard Support |
+|------------|----------------|-------------------|-------------------|
+| Default Setup | ✅ Full | ❌ Not Available | ⚠️ Read-Only |
+| Advanced Setup | ✅ Full | ✅ Full | ✅ Full |
+| No Setup | ❌ None | ❌ Not Available | ❌ Not Supported |
+
+**Migration Path**: To enable on-demand scanning for Default Setup repositories:
+1. Disable Default Setup in repository security settings
+2. Add `.github/workflows/codeql-advanced.yml` with `workflow_dispatch` trigger
+3. Configure languages and query suites as needed
+4. Verify workflow dispatch permissions in repository settings
+
 ## Security and compliance
 
 ### FedRAMP requirements
@@ -406,6 +453,45 @@ The dashboard follows enterprise-grade design principles with a professional col
 - **Accent**: Alert Orange (`oklch(0.65 0.18 45)`) - For actions requiring attention
 - **Typography**: Inter font family for technical precision and readability
 - **Components**: Consistent 16px base spacing with accessible contrast ratios
+
+## ⚡ Performance & Scalability
+
+### Current Optimizations
+
+- **Concurrent API Requests**: GitHub API calls use controlled concurrency (4-6 simultaneous requests)
+- **In-Memory Caching**: 60-second TTL for repository metadata and workflows
+- **Rate Limit Management**: Automatic backoff and retry with remaining quota tracking
+- **Lazy Loading**: Components and routes are code-split for optimal bundle size
+
+### Known Limitations
+
+- **Repository List**: Currently loads all repositories at once (synchronous pagination)
+- **Concurrent Limit**: Conservative concurrency limits to avoid secondary rate limits
+
+### Scalability Roadmap
+
+- **🚀 Repository Virtualization**: For organizations with >500 repositories
+  - Implement windowed rendering using `@tanstack/react-virtual`
+  - Lazy load repository metadata on scroll
+  - Estimated improvement: Handle 5000+ repositories with minimal memory impact
+  
+- **📊 Advanced Caching**: Server-side caching layer
+  - Redis/Azure Cache for Redis integration
+  - Stale-while-revalidate patterns
+  - 10x reduction in GitHub API calls
+
+- **⚡ GraphQL Migration**: Batch operations for improved efficiency
+  - Replace REST API calls with GitHub GraphQL API v4
+  - Single request for multiple repository metadata
+  - Estimated 60% reduction in API request count
+
+### Environment Variables for Performance Tuning
+
+```bash
+# Adjust concurrency limits (development only)
+GITHUB_MAX_CONCURRENT=8        # Default: 5
+GITHUB_CACHE_TTL=120000        # Default: 60000ms (60s)
+```
 
 ## 🔐 Security & Compliance
 

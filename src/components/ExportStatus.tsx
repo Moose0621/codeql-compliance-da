@@ -39,8 +39,13 @@ export function ExportStatus({ exportHistory }: ExportStatusProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="flex items-center gap-2 px-3">
-          <Clock size={14} className="text-muted-foreground" />
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="flex items-center gap-2 px-3"
+          aria-label={`View ${recentExports.length} recent export${recentExports.length !== 1 ? 's' : ''}`}
+        >
+          <Clock size={14} className="text-muted-foreground" aria-hidden="true" />
           <Badge variant="secondary" className="text-xs px-2">
             {recentExports.length} recent export{recentExports.length !== 1 ? 's' : ''}
           </Badge>
@@ -53,7 +58,7 @@ export function ExportStatus({ exportHistory }: ExportStatusProps) {
             {recentExports.map((exportItem, index) => (
               <Card key={index} className="border-muted">
                 <CardContent className="flex items-center gap-3 p-3">
-                  <div className="p-1.5 bg-primary/10 rounded">
+                  <div className="p-1.5 bg-primary/10 rounded" aria-hidden="true">
                     {getFormatIcon(exportItem.format)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -61,6 +66,7 @@ export function ExportStatus({ exportHistory }: ExportStatusProps) {
                       {exportItem.format.toUpperCase()} Report
                     </p>
                     <p className="text-xs text-muted-foreground">
+                      <span className="sr-only">Exported </span>
                       {getRelativeTime(exportItem.timestamp)}
                     </p>
                   </div>

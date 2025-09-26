@@ -1,5 +1,6 @@
-import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert, SarifAnalysis, SarifData, DefaultSetupConfig } from '@/types/dashboard';
+import type { Repository, SecurityFindings, WorkflowRun, CodeQLAlert, SarifAnalysis, SarifData, DefaultSetupConfig, Workflow, GitHubWorkflowsResponse, GitHubWorkflowRunsResponse, GitHubWorkflowRun, GitHubRepository, GitHubUserInfo, GitHubOrganizationInfo } from '@/types/dashboard';
 import { assertWorkflowDispatchable } from './github-dispatch-check';
+import { logWarn, logError } from './logger';
 /**
  * Architectural scalability notes (incremental implementation):
  * 1. Centralized rate limit tracking & adaptive backoff to prevent hard 403s.
@@ -23,7 +24,7 @@ interface RateLimitState {
   lastUpdated: number | null; // ms
 }
 
-type CacheEntry = { data: any; fetchedAt: number; ttl: number };
+type CacheEntry<T = unknown> = { data: T; fetchedAt: number; ttl: number };
 
 export class GitHubService {
   private config: GitHubConfig;
@@ -92,7 +93,7 @@ export class GitHubService {
     return entry.data as T;
   }
 
-  private writeCache(key: string, data: any, ttl = GitHubService.DEFAULT_TTL) {
+  private writeCache<T>(key: string, data: T, ttl = GitHubService.DEFAULT_TTL) {
     GitHubService.memoryCache.set(key, { data, fetchedAt: Date.now(), ttl });
   }
 
@@ -100,7 +101,7 @@ export class GitHubService {
     const method = (options.method || 'GET').toUpperCase();
     const isCacheable = method === 'GET' && cacheTTL !== 0;
     const key = this.cacheKey(endpoint);
-    const disableCache = (globalThis as any).__DISABLE_GITHUB_CACHE__ === true;
+    const disableCache = (globalThis as { __DISABLE_GITHUB_CACHE__?: boolean }).__DISABLE_GITHUB_CACHE__ === true;
     if (isCacheable && !disableCache) {
       const cached = this.readCache<T>(key);
       if (cached) return cached;
@@ -121,9 +122,9 @@ export class GitHubService {
       });
 
       // Update rate limit state when headers present
-  const remaining = (response as any).headers?.get?.('X-RateLimit-Remaining');
-  const limit = (response as any).headers?.get?.('X-RateLimit-Limit');
-  const reset = (response as any).headers?.get?.('X-RateLimit-Reset');
+      const remaining = response.headers?.get?.('X-RateLimit-Remaining');
+      const limit = response.headers?.get?.('X-RateLimit-Limit'); 
+      const reset = response.headers?.get?.('X-RateLimit-Reset');
       if (remaining && limit && reset) {
         GitHubService.rateLimit = {
           remaining: Number(remaining),
@@ -192,7 +193,7 @@ export class GitHubService {
 
   async getOrganizationRepositories(page = 1, perPage = 30): Promise<Repository[]> {
     try {
-      const repos = await this.makeRequest<any[]>(
+      const repos = await this.makeRequest<GitHubRepository[]>(
         `/orgs/${this.config.organization}/repos?page=${page}&per_page=${perPage}&sort=updated&direction=desc`,
         {},
         { cacheTTL: 30_000 }
@@ -212,7 +213,7 @@ export class GitHubService {
           try {
             // Workflows (cached briefly)
             const workflows = await this.getWorkflows(repo.name);
-            const hasCodeQLWorkflow = workflows.some((workflow: any) =>
+            const hasCodeQLWorkflow = workflows.some((workflow: Workflow) =>
               workflow.name.toLowerCase().includes('codeql') || workflow.path.includes('codeql')
             );
 
@@ -242,7 +243,7 @@ export class GitHubService {
               security_findings: securityFindings,
             });
           } catch (error) {
-            console.warn(`Failed to hydrate repo ${repo.name}:`, error);
+            logWarn(`Failed to hydrate repo ${repo.name}:`, error);
             results.push({
               id: repo.id,
               name: repo.name,
@@ -264,21 +265,21 @@ export class GitHubService {
       return results;
 
     } catch (error) {
-      console.error('Failed to fetch organization repositories:', error);
+      logError('Failed to fetch organization repositories:', error);
       throw error;
     }
   }
 
-  async getWorkflows(repoName: string): Promise<any[]> {
+  async getWorkflows(repoName: string): Promise<Workflow[]> {
     try {
-      const response = await this.makeRequest<{ workflows: any[] }>(
+      const response = await this.makeRequest<GitHubWorkflowsResponse>(
         `/repos/${this.config.organization}/${repoName}/actions/workflows`,
         {},
         { cacheTTL: 60_000 }
       );
       return response.workflows;
     } catch (error) {
-      console.warn(`Failed to fetch workflows for ${repoName}:`, error);
+      logWarn(`Failed to fetch workflows for ${repoName}:`, error);
       return [];
     }
   }
@@ -291,19 +292,19 @@ export class GitHubService {
         endpoint += `&event=schedule,workflow_dispatch,push`;
       }
 
-      const response = await this.makeRequest<{ workflow_runs: any[] }>(endpoint, {}, { cacheTTL: 15_000 });
+      const response = await this.makeRequest<GitHubWorkflowRunsResponse>(endpoint, {}, { cacheTTL: 15_000 });
       
       let runs = response.workflow_runs;
       
       // Filter for CodeQL runs if specified
       if (workflowName === 'codeql') {
-        runs = runs.filter((run: any) => 
+        runs = runs.filter((run: GitHubWorkflowRun) => 
           run.name?.toLowerCase().includes('codeql') ||
           run.path?.includes('codeql')
         );
       }
 
-      return runs.map((run: any) => ({
+      return runs.map((run: GitHubWorkflowRun) => ({
         id: run.id,
         status: run.status,
         conclusion: run.conclusion,
@@ -312,7 +313,7 @@ export class GitHubService {
         html_url: run.html_url,
       }));
     } catch (error) {
-      console.warn(`Failed to fetch workflow runs for ${repoName}:`, error);
+      logWarn(`Failed to fetch workflow runs for ${repoName}:`, error);
       return [];
     }
   }
@@ -358,7 +359,7 @@ export class GitHubService {
       return findings;
     } catch (error) {
       // If we can't access code scanning alerts (maybe no alerts exist or insufficient permissions)
-      console.warn(`Failed to fetch security findings for ${repoName}:`, error);
+      logWarn(`Failed to fetch security findings for ${repoName}:`, error);
       return {
         critical: 0,
         high: 0,
@@ -417,7 +418,7 @@ export class GitHubService {
       
       return anyCodeQLWorkflow ? anyCodeQLWorkflow.id : null;
     } catch (error) {
-      console.error(`Failed to find CodeQL workflow for ${repoName}:`, error);
+      logError(`Failed to find CodeQL workflow for ${repoName}:`, error);
       return null;
     }
   }
@@ -458,12 +459,12 @@ export class GitHubService {
     await this.dispatchWorkflow(repoName, workflowId, ref);
   }
 
-  async getUserInfo(): Promise<any> {
-    return this.makeRequest('/user', {}, { cacheTTL: 300_000 });
+  async getUserInfo(): Promise<GitHubUserInfo> {
+    return this.makeRequest<GitHubUserInfo>('/user', {}, { cacheTTL: 300_000 });
   }
 
-  async getOrganizationInfo(): Promise<any> {
-    return this.makeRequest(`/orgs/${this.config.organization}`, {}, { cacheTTL: 300_000 });
+  async getOrganizationInfo(): Promise<GitHubOrganizationInfo> {
+    return this.makeRequest<GitHubOrganizationInfo>(`/orgs/${this.config.organization}`, {}, { cacheTTL: 300_000 });
   }
 
   private mapWorkflowStatus(status: string | null, conclusion: string | null): 'success' | 'failure' | 'in_progress' | 'pending' {
@@ -518,7 +519,7 @@ export class GitHubService {
         { cacheTTL: 30_000 } // 30 second cache for analysis lists
       );
     } catch (error) {
-      console.warn(`Failed to fetch code scanning analyses for ${repoName}:`, error);
+      logWarn(`Failed to fetch code scanning analyses for ${repoName}:`, error);
       return [];
     }
   }
@@ -570,7 +571,7 @@ export class GitHubService {
       
       return allAnalyses;
     } catch (error) {
-      console.warn(`Failed to fetch historical analyses for ${repoName}:`, error);
+      logWarn(`Failed to fetch historical analyses for ${repoName}:`, error);
       return [];
     }
   }
@@ -593,7 +594,7 @@ export class GitHubService {
         { cacheTTL: 300_000 } // 5 minute cache for SARIF data
       );
     } catch (error) {
-      console.error(`Failed to fetch SARIF data for analysis ${analysisId}:`, error);
+      logError(`Failed to fetch SARIF data for analysis ${analysisId}:`, error);
       throw error;
     }
   }
@@ -615,7 +616,7 @@ export class GitHubService {
       if (error instanceof Error && error.message.includes('404')) {
         return null;
       }
-      console.warn(`Failed to fetch Default Setup config for ${repoName}:`, error);
+      logWarn(`Failed to fetch Default Setup config for ${repoName}:`, error);
       return null;
     }
   }
