@@ -24,6 +24,30 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
     total: 0
   });
 
+  const formatFindingCount = (count: number, label: string) => {
+    if (count === 0) return '';
+    return `${count} ${label}${count === 1 ? '' : 's'}`;
+  };
+
+  const pieChartLabel = [
+    'Security findings pie chart showing',
+    `${aggregateFindings.total} total ${aggregateFindings.total === 1 ? 'finding' : 'findings'}:`,
+    formatFindingCount(aggregateFindings.critical, 'critical'),
+    formatFindingCount(aggregateFindings.high, 'high'), 
+    formatFindingCount(aggregateFindings.medium, 'medium'),
+    formatFindingCount(aggregateFindings.low, 'low'),
+    formatFindingCount(aggregateFindings.note, 'note')
+  ].filter(Boolean).join(' ');
+
+  const barChartLabel = [
+    'Security findings bar chart showing counts by severity:',
+    formatFindingCount(aggregateFindings.critical, 'Critical'),
+    formatFindingCount(aggregateFindings.high, 'High'),
+    formatFindingCount(aggregateFindings.medium, 'Medium'), 
+    formatFindingCount(aggregateFindings.low, 'Low'),
+    formatFindingCount(aggregateFindings.note, 'Note')
+  ].filter(Boolean).join(' ');
+
   const pieData = [
     { name: 'Critical', value: aggregateFindings.critical, color: '#dc2626' },
     { name: 'High', value: aggregateFindings.high, color: '#ea580c' },
@@ -48,7 +72,7 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
         </CardHeader>
         <CardContent>
           {aggregateFindings.total > 0 ? (
-            <div role="img" aria-label={`Security findings pie chart showing ${aggregateFindings.total} total findings: ${aggregateFindings.critical} critical, ${aggregateFindings.high} high, ${aggregateFindings.medium} medium, ${aggregateFindings.low} low, ${aggregateFindings.note} notes`}>
+            <div role="img" aria-label={pieChartLabel}>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie
@@ -82,7 +106,7 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
           <CardTitle className="text-lg font-semibold">Finding Counts</CardTitle>
         </CardHeader>
         <CardContent>
-          <div role="img" aria-label={`Security findings bar chart showing counts by severity: Critical ${aggregateFindings.critical}, High ${aggregateFindings.high}, Medium ${aggregateFindings.medium}, Low ${aggregateFindings.low}, Notes ${aggregateFindings.note}`}>
+          <div role="img" aria-label={barChartLabel}>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={barData}>
                 <XAxis dataKey="severity" />
