@@ -14,16 +14,30 @@ Object.defineProperty(global, 'crypto', {
 });
 
 // Mock EventSource
-Object.defineProperty(global, 'EventSource', {
-  value: vi.fn().mockImplementation((url, options) => ({
+const mockEventSourceInstances: any[] = [];
+const mockEventSource = vi.fn().mockImplementation((url, options) => {
+  const instance = {
     url,
-    readyState: 1,
+    readyState: 1, // Start as OPEN
     onopen: null,
     onmessage: null,
     onerror: null,
-    close: vi.fn(),
+    close: vi.fn(() => {
+      instance.readyState = 2; // CLOSED
+    }),
     addEventListener: vi.fn(),
-  })),
+  };
+  mockEventSourceInstances.push(instance);
+  return instance;
+});
+
+// Add EventSource constants
+mockEventSource.CONNECTING = 0;
+mockEventSource.OPEN = 1;
+mockEventSource.CLOSED = 2;
+
+Object.defineProperty(global, 'EventSource', {
+  value: mockEventSource,
   writable: true,
 });
 
@@ -69,6 +83,7 @@ describe('WebhookService', () => {
   beforeEach(() => {
     webhookService = new WebhookService('/test/webhook');
     vi.clearAllMocks();
+    mockEventSourceInstances.length = 0; // Clear instances array
   });
 
   afterEach(() => {
@@ -178,7 +193,7 @@ describe('WebhookService', () => {
     test('should connect to SSE endpoint', () => {
       webhookService.connect();
       
-      expect(EventSource).toHaveBeenCalledWith('/test/webhook', {
+      expect(mockEventSource).toHaveBeenCalledWith('/test/webhook', {
         withCredentials: true,
       });
     });
@@ -192,19 +207,19 @@ describe('WebhookService', () => {
       webhookService.connect();
       
       // Simulate EventSource open event
-      const mockEventSource = vi.mocked(EventSource).mock.results[0].value;
-      mockEventSource.onopen?.({} as any);
+      const mockInstance = mockEventSourceInstances[0];
+      mockInstance.onopen?.({} as any);
       
       expect(statusChanges).toContain('connected');
     });
 
     test('should disconnect and cleanup', () => {
       webhookService.connect();
-      const mockEventSource = vi.mocked(EventSource).mock.results[0].value;
+      const mockInstance = mockEventSourceInstances[0];
 
       webhookService.disconnect();
       
-      expect(mockEventSource.close).toHaveBeenCalled();
+      expect(mockInstance.close).toHaveBeenCalled();
       expect(webhookService.getConnectionStatus()).toBe('disconnected');
     });
   });
@@ -261,17 +276,18 @@ describe('WebhookService', () => {
       vi.useFakeTimers();
       
       webhookService.connect();
-      const mockEventSource = vi.mocked(EventSource).mock.results[0].value;
+      const mockInstance = mockEventSourceInstances[0];
       
-      // Simulate error
-      mockEventSource.onerror?.({} as any);
+      // Simulate error - close the connection and set state to closed
+      mockInstance.readyState = 2; // CLOSED
+      mockInstance.onerror?.({} as any);
       expect(webhookService.getConnectionStatus()).toBe('disconnected');
       
-      // Fast forward time to trigger reconnection
-      vi.advanceTimersByTime(2000);
+      // Fast forward time to trigger reconnection (delay = 1000 * 2^0 = 1000ms)
+      vi.advanceTimersByTime(1000);
       
       // Should attempt to reconnect
-      expect(EventSource).toHaveBeenCalledTimes(2);
+      expect(mockEventSource).toHaveBeenCalledTimes(2);
       
       vi.useRealTimers();
     });
@@ -281,15 +297,22 @@ describe('WebhookService', () => {
       
       webhookService.connect();
       
-      // Simulate multiple failures
+      // Simulate multiple failures with proper timing
       for (let i = 0; i < 6; i++) {
-        const mockEventSource = vi.mocked(EventSource).mock.results[i].value;
-        mockEventSource.onerror?.({} as any);
-        vi.advanceTimersByTime(60000); // Advance by max delay
+        // Get the most recent instance
+        const mockInstance = mockEventSourceInstances[mockEventSourceInstances.length - 1];
+        // Set to closed state so reconnection can proceed
+        mockInstance.readyState = 2; // CLOSED
+        mockInstance.onerror?.({} as any);
+        
+        // Advance by enough time to trigger next reconnection attempt
+        // The delay formula is: Math.min(1000 * 2^(attempts-1), 30000)
+        const delay = Math.min(1000 * Math.pow(2, i), 30000);
+        vi.advanceTimersByTime(delay + 100); // Add a bit extra to ensure timeout fires
       }
       
-      // Should not exceed max attempts (5)
-      expect(EventSource).toHaveBeenCalledTimes(6); // Initial + 5 retries
+      // Should not exceed max attempts (5 retries + initial = 6 total)
+      expect(mockEventSource).toHaveBeenCalledTimes(6); // Initial + 5 retries
       
       vi.useRealTimers();
     });
