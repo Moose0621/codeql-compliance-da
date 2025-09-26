@@ -363,3 +363,181 @@ export interface FreshnessSummary {
 }
 
 export type ExportFormat = 'pdf' | 'html' | 'csv' | 'json' | 'xlsx';
+
+// Real-time Webhook Integration Types
+export interface GitHubWebhookEvent {
+  action: string;
+  repository: {
+    id: number;
+    name: string;
+    full_name: string;
+    owner: {
+      login: string;
+      avatar_url: string;
+    };
+  };
+  sender: {
+    login: string;
+    avatar_url: string;
+  };
+  installation?: {
+    id: number;
+  };
+}
+
+export interface WorkflowRunWebhookEvent extends GitHubWebhookEvent {
+  action: 'requested' | 'in_progress' | 'completed';
+  workflow_run: {
+    id: number;
+    name: string;
+    status: 'requested' | 'in_progress' | 'queued' | 'completed';
+    conclusion: 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required' | null;
+    created_at: string;
+    updated_at: string;
+    html_url: string;
+    run_number: number;
+    workflow_id: number;
+    head_commit: {
+      id: string;
+      message: string;
+      author: {
+        name: string;
+        email: string;
+      };
+    };
+  };
+}
+
+export interface CodeScanningAlertWebhookEvent extends GitHubWebhookEvent {
+  action: 'created' | 'reopened' | 'closed_by_user' | 'fixed' | 'appeared_in_branch' | 'closed_by_user';
+  alert: {
+    number: number;
+    created_at: string;
+    updated_at: string;
+    dismissed_at: string | null;
+    dismissed_by: any | null;
+    dismissed_reason: string | null;
+    rule: {
+      id: string;
+      severity: 'error' | 'warning' | 'note';
+      security_severity_level: 'critical' | 'high' | 'medium' | 'low' | null;
+      description: string;
+    };
+    state: 'open' | 'dismissed' | 'fixed';
+  };
+}
+
+export interface PushWebhookEvent extends GitHubWebhookEvent {
+  ref: string;
+  before: string;
+  after: string;
+  commits: Array<{
+    id: string;
+    message: string;
+    author: {
+      name: string;
+      email: string;
+    };
+    added: string[];
+    removed: string[];
+    modified: string[];
+  }>;
+  head_commit: {
+    id: string;
+    message: string;
+    author: {
+      name: string;
+      email: string;
+    };
+  };
+}
+
+export interface SecurityAdvisoryWebhookEvent extends GitHubWebhookEvent {
+  action: 'published' | 'updated' | 'withdrawn';
+  security_advisory: {
+    ghsa_id: string;
+    cve_id: string | null;
+    summary: string;
+    description: string;
+    severity: 'low' | 'moderate' | 'high' | 'critical';
+    published_at: string;
+    updated_at: string;
+    withdrawn_at: string | null;
+    vulnerabilities: Array<{
+      package: {
+        ecosystem: string;
+        name: string;
+      };
+      severity: string;
+      vulnerable_version_range: string;
+      first_patched_version: {
+        identifier: string;
+      } | null;
+    }>;
+  };
+}
+
+export type WebhookEventType = 
+  | 'workflow_run'
+  | 'code_scanning_alert'  
+  | 'push'
+  | 'security_advisory'
+  | 'pull_request'
+  | 'repository';
+
+export interface WebhookSignature {
+  'x-github-delivery': string;
+  'x-github-event': WebhookEventType;
+  'x-hub-signature-256': string;
+  'x-github-hook-id': string;
+  'x-github-hook-installation-target-id': string;
+  'x-github-hook-installation-target-type': string;
+}
+
+export interface WebSocketConnectionState {
+  status: 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
+  lastConnected: string | null;
+  reconnectAttempts: number;
+  maxReconnectAttempts: number;
+  connectionId: string | null;
+  latency: number | null;
+}
+
+export interface RealTimeEvent {
+  id: string;
+  type: 'repository_update' | 'scan_status' | 'security_alert' | 'webhook_received';
+  timestamp: string;
+  data: any;
+  source: 'webhook' | 'polling' | 'user_action';
+  repository?: string;
+}
+
+export interface WebhookValidationResult {
+  isValid: boolean;
+  error?: string;
+  eventType?: WebhookEventType;
+  deliveryId?: string;
+}
+
+export interface WebSocketMessage {
+  type: 'event' | 'heartbeat' | 'error' | 'reconnect';
+  payload?: RealTimeEvent | { error: string } | { status: string };
+  timestamp: string;
+}
+
+// Connection Management
+export interface ConnectionHealth {
+  websocket: {
+    connected: boolean;
+    latency: number;
+    lastHeartbeat: string;
+    errors: number;
+  };
+  github: {
+    rateLimit: {
+      remaining: number;
+      resetAt: string;
+    };
+    status: 'operational' | 'degraded' | 'major_outage';
+  };
+}
