@@ -230,12 +230,12 @@ npm run test:e2e -- tests/e2e/webhook-integration.spec.ts --grep "Security Tests
 npm run test:e2e -- tests/e2e/webhook-integration.spec.ts --grep "Performance Tests"
 ```
 
-### Mock Server Testing
-The mock infrastructure can be tested independently:
-```bash
-# Test mock server functionality (requires custom setup)
-node tests/e2e/webhook-infrastructure.test.js
-```
+### Mock Infrastructure Validation
+The mock servers are validated as part of the comprehensive Playwright test suites. The mock infrastructure includes:
+- Webhook signature validation testing
+- WebSocket connection management validation  
+- Performance and load testing capabilities
+- Security scenario simulation
 
 ## Test Configuration
 
