@@ -697,7 +697,7 @@ function App() {
           </TabsContent>
 
           <TabsContent value="notifications" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Main Notification Center */}
               <div className="lg:col-span-2">
                 <NotificationCenter maxHeight="600px" />
