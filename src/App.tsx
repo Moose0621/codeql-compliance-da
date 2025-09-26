@@ -24,6 +24,7 @@ import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RepositoryDetailsDialog } from '@/components/RepositoryDetailsDialog';
 import { Input } from '@/components/ui/input';
+import { Toggle } from '@/components/ui/toggle';
 
 interface GitHubConfig {
   token: string;
@@ -56,6 +57,7 @@ function App() {
   const [detailsRepo, setDetailsRepo] = useState<Repository | null>(null);
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
+  const [showResultsOnly, setShowResultsOnly] = useState(true); // Default to showing only repos with results
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 30;
 
@@ -283,12 +285,26 @@ function App() {
 
   const stats = useMemo(getOverallStats, [repositories]);
 
+  // Helper function to check if repository has scan results
+  const hasResults = (repo: Repository): boolean => {
+    return !!(repo.security_findings && repo.security_findings.total > 0);
+  };
+
   const filteredRepositories = useMemo(() => {
     let list = repositories;
+    
+    // Filter by search term
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(r => r.name.toLowerCase().includes(q) || r.full_name.toLowerCase().includes(q));
     }
+    
+    // Filter by scan results if enabled
+    if (showResultsOnly) {
+      list = list.filter(r => hasResults(r));
+    }
+    
+    // Filter by severity
     if (severityFilter) {
       list = list.filter(r => {
         const f = r.security_findings;
@@ -305,16 +321,16 @@ function App() {
       });
     }
     return list;
-  }, [repositories, search, severityFilter]);
+  }, [repositories, search, severityFilter, showResultsOnly]);
 
   // Persist filters
   useEffect(() => {
     try {
-      localStorage.setItem('repo-filters', JSON.stringify({ search, severityFilter }));
+      localStorage.setItem('repo-filters', JSON.stringify({ search, severityFilter, showResultsOnly }));
     } catch {
       // Ignore localStorage errors (e.g., storage quota exceeded)
     }
-  }, [search, severityFilter]);
+  }, [search, severityFilter, showResultsOnly]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem('repo-filters');
@@ -322,6 +338,7 @@ function App() {
         const parsed = JSON.parse(raw);
         if (parsed.search) setSearch(parsed.search);
         if (parsed.severityFilter) setSeverityFilter(parsed.severityFilter);
+        if (typeof parsed.showResultsOnly === 'boolean') setShowResultsOnly(parsed.showResultsOnly);
       }
     } catch {
       // Ignore localStorage errors (e.g., invalid JSON)
@@ -514,17 +531,29 @@ function App() {
                       <MagnifyingGlass size={16} className="text-muted-foreground" />
                       <Input placeholder="Search repositories" value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {['critical','high','medium','low','note','none'].map(s => (
-                        <Badge
-                          key={s}
-                          onClick={() => setSeverityFilter(prev => prev === s ? null : s)}
-                          className={`cursor-pointer select-none ${severityFilter === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                        >{s}</Badge>
-                      ))}
-                      {severityFilter && (
-                        <Button variant="ghost" size="sm" onClick={() => setSeverityFilter(null)}>Clear</Button>
-                      )}
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Toggle
+                          pressed={showResultsOnly}
+                          onPressedChange={setShowResultsOnly}
+                          aria-label="Toggle results filter"
+                          className="text-sm"
+                        >
+                          Results only
+                        </Toggle>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {['critical','high','medium','low','note','none'].map(s => (
+                          <Badge
+                            key={s}
+                            onClick={() => setSeverityFilter(prev => prev === s ? null : s)}
+                            className={`cursor-pointer select-none ${severityFilter === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                          >{s}</Badge>
+                        ))}
+                        {severityFilter && (
+                          <Button variant="ghost" size="sm" onClick={() => setSeverityFilter(null)}>Clear</Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground flex items-center gap-1"><FunnelSimple size={14} /> Showing {filteredRepositories.length} of {repositories.length}</p>
