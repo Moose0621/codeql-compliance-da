@@ -306,7 +306,7 @@ export class GitHubAPIMock {
    * Extract repository name from GitHub API URL
    */
   private extractRepoFromUrl(url: string): string {
-    const match = url.match(/\/repos\/[^\/]+\/([^\/]+)/);
+    const match = url.match(/\/repos\/[^/]+\/([^/]+)/);
     return match ? match[1] : '';
   }
 
