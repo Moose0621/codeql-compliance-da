@@ -12,6 +12,12 @@ export interface Repository {
   security_findings?: SecurityFindings;
   workflow_dispatch_enabled: boolean;
   default_branch: string;
+  // New filterable metadata for advanced search
+  languages?: string[];
+  topics?: string[];
+  last_activity_date?: string;
+  team_slug?: string;
+  compliance_score?: number;
 }
 
 export interface SecurityFindings {
@@ -77,6 +83,11 @@ export interface GitHubRepository {
     avatar_url: string;
   };
   default_branch: string;
+  language: string | null;
+  languages_url: string;
+  topics: string[];
+  updated_at: string;
+  pushed_at: string;
 }
 
 export interface GitHubUserInfo {
@@ -206,6 +217,41 @@ export interface TechnicalDetailReport {
 
 export type ReportType = 'executive' | 'technical' | 'compliance';
 export type ReportFormat = 'pdf' | 'html' | 'csv' | 'json';
+
+// Advanced filtering interfaces
+export interface FilterOptions {
+  languages: string[];
+  topics: string[];
+  teams: string[];
+  complianceScoreRange: [number, number];
+  activityPeriod: '24h' | '7d' | '30d' | '3m' | '6m' | '1y' | 'all';
+  lastScanAge: '1d' | '7d' | '30d' | '90d' | 'any';
+}
+
+export interface FilterState {
+  search: string;
+  severityFilter: string | null;
+  showResultsOnly: boolean;
+  advanced: Partial<FilterOptions>;
+}
+
+export interface FilterPreset {
+  id: string;
+  name: string;
+  description: string;
+  filters: Partial<FilterState>;
+  icon?: string;
+}
+
+export interface SearchQuery {
+  text: string;
+  operators: {
+    and: string[];
+    or: string[];
+    not: string[];
+  };
+  fields: Record<string, string[]>;
+}
 
 // SARIF and Default Setup Analysis Types
 export interface SarifAnalysis {

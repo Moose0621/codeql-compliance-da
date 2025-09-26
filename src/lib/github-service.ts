@@ -229,6 +229,21 @@ export class GitHubService {
             }
 
             const securityFindings = await this.getSecurityFindings(repo.name);
+            
+            // Fetch repository languages (with fallback for performance)
+            const languages = await this.getRepositoryLanguages(repo.name).catch(() => []);
+            
+            // Calculate scan age in hours for compliance score
+            const scanAgeHours = lastScanDate 
+              ? (Date.now() - new Date(lastScanDate).getTime()) / (1000 * 60 * 60)
+              : Infinity;
+            
+            // Calculate compliance score
+            const complianceScore = this.calculateComplianceScore(
+              hasCodeQLWorkflow,
+              securityFindings,
+              scanAgeHours
+            );
 
             results.push({
               id: repo.id,
@@ -241,6 +256,12 @@ export class GitHubService {
               last_scan_date: lastScanDate,
               last_scan_status: lastScanStatus,
               security_findings: securityFindings,
+              // New filterable metadata
+              languages,
+              topics: repo.topics || [],
+              last_activity_date: repo.pushed_at || repo.updated_at,
+              compliance_score: complianceScore,
+              // team_slug will be set to undefined for now (requires additional API calls)
             });
           } catch (error) {
             logWarn(`Failed to hydrate repo ${repo.name}:`, error);
@@ -255,6 +276,11 @@ export class GitHubService {
               last_scan_date: undefined,
               last_scan_status: 'pending',
               security_findings: { critical: 0, high: 0, medium: 0, low: 0, note: 0, total: 0 },
+              // New filterable metadata with defaults
+              languages: [],
+              topics: repo.topics || [],
+              last_activity_date: repo.pushed_at || repo.updated_at,
+              compliance_score: 0, // Low score for failed repos
             });
           }
         }
@@ -369,6 +395,59 @@ export class GitHubService {
         total: 0,
       };
     }
+  }
+
+  async getRepositoryLanguages(repoName: string): Promise<string[]> {
+    try {
+      const response = await this.makeRequest<Record<string, number>>(
+        `/repos/${this.config.organization}/${repoName}/languages`,
+        {},
+        { cacheTTL: 300_000 } // Cache for 5 minutes since languages don't change often
+      );
+      
+      // Return languages sorted by usage (descending)
+      return Object.entries(response)
+        .sort(([, a], [, b]) => b - a)
+        .map(([language]) => language);
+    } catch (error) {
+      logWarn(`Failed to fetch languages for ${repoName}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate a compliance score for a repository based on multiple factors
+   * Score is from 0-100 where higher is better
+   */
+  private calculateComplianceScore(
+    hasCodeQLWorkflow: boolean,
+    securityFindings: SecurityFindings,
+    lastScanAge: number // in hours
+  ): number {
+    let score = 0;
+    
+    // Base score for having CodeQL workflow (30 points)
+    if (hasCodeQLWorkflow) score += 30;
+    
+    // Scan freshness (30 points max)
+    if (lastScanAge <= 24) score += 30; // Within 24 hours
+    else if (lastScanAge <= 168) score += 20; // Within 7 days
+    else if (lastScanAge <= 720) score += 10; // Within 30 days
+    // Otherwise 0 points for freshness
+    
+    // Security findings impact (40 points max, deducted based on severity)
+    const baseSecurity = 40;
+    const criticalPenalty = securityFindings.critical * 8;
+    const highPenalty = securityFindings.high * 4;
+    const mediumPenalty = securityFindings.medium * 2;
+    const lowPenalty = securityFindings.low * 1;
+    const notePenalty = securityFindings.note * 0.5;
+    
+    const totalPenalty = criticalPenalty + highPenalty + mediumPenalty + lowPenalty + notePenalty;
+    const securityScore = Math.max(0, baseSecurity - totalPenalty);
+    score += securityScore;
+    
+    return Math.min(100, Math.max(0, Math.round(score)));
   }
 
   async dispatchWorkflow(repoName: string, workflowId: string | number, ref: string = 'main'): Promise<void> {
