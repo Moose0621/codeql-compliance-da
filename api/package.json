@@ -1,4 +1,3 @@
-# Azure Function package.json for webhook endpoints
 {
   "name": "codeql-compliance-webhook-functions",
   "version": "1.0.0",

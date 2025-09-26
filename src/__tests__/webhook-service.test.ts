@@ -156,7 +156,7 @@ describe('WebhookService', () => {
         ...mockWorkflowEvent,
         workflow_run: {
           ...mockWorkflowEvent.workflow_run,
-          conclusion: 'failure',
+          conclusion: 'failure' as const,
         },
       };
 
@@ -241,12 +241,12 @@ describe('WebhookService', () => {
         throw new Error('Callback error');
       });
 
-      webhookService.subscribe('test', errorCallback);
+      webhookService.subscribe('notification', errorCallback);
 
       // Should not throw
       expect(() => {
         webhookService['emitUpdate']({
-          type: 'test',
+          type: 'notification',
           timestamp: new Date().toISOString(),
           data: {},
         });

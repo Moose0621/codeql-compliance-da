@@ -63,11 +63,30 @@ export class WebhookService {
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
         
-      return expectedSig === sigHex;
+      // Use constant-time comparison to prevent timing attacks
+      return WebhookService.timingSafeEquals(expectedSig, sigHex);
     } catch (error) {
       logError('Webhook signature verification failed:', error);
       return false;
     }
+  }
+
+  /**
+   * Constant-time string comparison to prevent timing attacks
+   * @param a First string to compare
+   * @param b Second string to compare
+   */
+  private static timingSafeEquals(a: string, b: string): boolean {
+    if (a.length !== b.length) {
+      return false;
+    }
+    
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    
+    return result === 0;
   }
 
   /**
@@ -362,7 +381,10 @@ export class WebhookService {
 let webhookServiceInstance: WebhookService | null = null;
 
 export function getWebhookService(webhookEndpoint: string = '/api/webhook/events'): WebhookService {
-  if (!webhookServiceInstance) {
+  if (!webhookServiceInstance || webhookServiceInstance['webhookEndpoint'] !== webhookEndpoint) {
+    if (webhookServiceInstance) {
+      webhookServiceInstance.disconnect();
+    }
     webhookServiceInstance = new WebhookService(webhookEndpoint);
   }
   return webhookServiceInstance;

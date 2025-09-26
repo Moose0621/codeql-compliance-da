@@ -83,26 +83,6 @@ export function useRealTimeUpdates(options: UseRealTimeUpdatesOptions = {}): Use
     };
   }, [webhookEndpoint]);
 
-  // Subscribe to all updates
-  useEffect(() => {
-    if (!webhookServiceRef.current) return;
-
-    const unsubscribe = webhookServiceRef.current.subscribe('all', (update: RealtimeUpdate) => {
-      handleRealtimeUpdate(update);
-    });
-
-    unsubscribeFnsRef.current.push(unsubscribe);
-
-    return unsubscribe;
-  }, [onRepositoryUpdate, onScanRequestUpdate, onNotification, showToastNotifications]);
-
-  // Auto-connect if enabled
-  useEffect(() => {
-    if (autoConnect && webhookServiceRef.current && connectionStatus === 'disconnected') {
-      webhookServiceRef.current.connect();
-    }
-  }, [autoConnect]);
-
   const handleRealtimeUpdate = useCallback((update: RealtimeUpdate) => {
     switch (update.type) {
       case 'repository_status':
@@ -154,6 +134,26 @@ export function useRealTimeUpdates(options: UseRealTimeUpdatesOptions = {}): Use
         break;
     }
   }, [onRepositoryUpdate, onScanRequestUpdate, onNotification, showToastNotifications]);
+
+  // Subscribe to all updates
+  useEffect(() => {
+    if (!webhookServiceRef.current) return;
+
+    const unsubscribe = webhookServiceRef.current.subscribe('all', (update: RealtimeUpdate) => {
+      handleRealtimeUpdate(update);
+    });
+
+    unsubscribeFnsRef.current.push(unsubscribe);
+
+    return unsubscribe;
+  }, [handleRealtimeUpdate]);
+
+  // Auto-connect if enabled
+  useEffect(() => {
+    if (autoConnect && webhookServiceRef.current && connectionStatus === 'disconnected') {
+      webhookServiceRef.current.connect();
+    }
+  }, [autoConnect]);
 
   const connect = useCallback(() => {
     if (webhookServiceRef.current) {

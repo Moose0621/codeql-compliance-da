@@ -15,7 +15,7 @@ interface RequestBody {
  */
 app.http("webhook-github", {
   methods: ["POST"],
-  authLevel: "anonymous", // In production, use function-level auth
+  authLevel: "function", // Use function-level auth for security
   route: "webhook/github",
   handler: async (request, context) => {
     try {
