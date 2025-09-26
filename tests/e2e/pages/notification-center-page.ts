@@ -301,15 +301,16 @@ export class NotificationCenterPage {
     const searchInput = this.page.getByPlaceholder('Search notifications...');
     await searchInput.fill(searchTerm);
     
-    // Wait for search results
-    await this.page.waitForTimeout(500);
+    // Wait for search results to update
+    await expect(this.notificationItems.first()).toBeVisible();
   }
 
   async clearSearch(): Promise<void> {
     const searchInput = this.page.getByPlaceholder('Search notifications...');
     await searchInput.clear();
     
-    // Wait for search to clear
-    await this.page.waitForTimeout(500);
+    // Wait for search to clear and all notifications to be visible
+    const totalNotifications = await this.notificationItems.count();
+    await expect(this.notificationItems).toHaveCount(totalNotifications);
   }
 }

@@ -35,7 +35,7 @@ export class NotificationTestDataManager {
     customContext?: Partial<NotificationContext>
   ): NotificationEvent {
     return {
-      id: `security-alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `security-alert-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       type: 'security_alert',
       severity,
       title: `Security Vulnerability Detected - ${severity.toUpperCase()}`,
@@ -82,7 +82,7 @@ export class NotificationTestDataManager {
     ];
 
     return {
-      id: `compliance-violation-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `compliance-violation-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       type: 'compliance_violation',
       severity: 'medium',
       title: `${policyName} Violation`,
@@ -122,7 +122,7 @@ export class NotificationTestDataManager {
     const runId = Math.floor(Math.random() * 90000000) + 10000000;
 
     return {
-      id: `workflow-failure-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `workflow-failure-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       type: 'workflow_failure',
       severity: 'high',
       title: `${workflowName} Workflow Failed`,
@@ -157,7 +157,7 @@ export class NotificationTestDataManager {
     };
 
     return {
-      id: `status-change-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `status-change-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       type: 'repository_status_change',
       severity: 'info',
       title: `Repository Status Changed`,
@@ -184,7 +184,7 @@ export class NotificationTestDataManager {
     const highFindings = Math.floor(totalFindings * 0.3);
     
     return {
-      id: `digest-${timeframe}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `digest-${timeframe}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       type: 'scheduled_digest',
       severity: 'info',
       title: `Security Digest - Last ${timeframe === '24h' ? '24 Hours' : '7 Days'}`,
@@ -476,9 +476,10 @@ export class NotificationTestDataManager {
 
   // ===== Helper Methods =====
 
+  private static readonly COMMON_CWE_NUMBERS = [79, 89, 120, 200, 209, 269, 287, 311, 352, 362, 400, 502, 601, 611, 732, 798, 807, 862];
+
   private static getRandomRuleId(): string {
-    const cweNumbers = [79, 89, 120, 200, 209, 269, 287, 311, 352, 362, 400, 502, 601, 611, 732, 798, 807, 862];
-    return `CWE-${cweNumbers[Math.floor(Math.random() * cweNumbers.length)]}`;
+    return `CWE-${this.COMMON_CWE_NUMBERS[Math.floor(Math.random() * this.COMMON_CWE_NUMBERS.length)]}`;
   }
 
   private static getRandomFilePath(): string {
