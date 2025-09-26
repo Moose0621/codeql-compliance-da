@@ -330,7 +330,7 @@ export class QualityReportGenerator {
   ): Promise<QualityReport> {
     const metrics = await this.metricsCollector.collectAllMetrics();
     
-    // Import QualityGateEvaluator to avoid circular dependency
+    // Import QualityGateEvaluator - now avoiding circular dependency
     const { QualityGateEvaluator } = await import('./quality-gates');
     const evaluator = new QualityGateEvaluator(metrics);
     
@@ -368,26 +368,12 @@ export class QualityReportGenerator {
     const gates_failed = gateResults.filter(g => g.status === 'FAIL').length;
     const gates_warned = gateResults.filter(g => g.status === 'WARN').length;
 
-    const overall_status: 'PASS' | 'FAIL' | 'WARN' = 
-      gates_failed > 0 ? 'FAIL' : gates_warned > 0 ? 'WARN' : 'PASS';
-
-    const critical_issues: string[] = [];
-    const recommendations: string[] = [];
-
-    // Analyze metrics and generate issues/recommendations
-    if (metrics.test_coverage.overall < 90) {
-      critical_issues.push(`Test coverage at ${metrics.test_coverage.overall}% - below 90% target`);
-      recommendations.push('Increase test coverage, especially for new features');
-    }
-
-    if (metrics.security.critical_vulnerabilities > 0) {
-      critical_issues.push(`${metrics.security.critical_vulnerabilities} critical security vulnerabilities found`);
-      recommendations.push('Address critical security vulnerabilities immediately');
-    }
-
-    if (metrics.performance.lighthouse_performance_score < 90) {
-      recommendations.push('Optimize performance to achieve >90 Lighthouse score');
-    }
+    // Import assessment utilities to avoid circular dependency
+    const { QualityAssessmentUtils } = require('./quality-assessment-utils');
+    
+    const overall_status = QualityAssessmentUtils.calculateOverallStatus(gateResults);
+    const critical_issues = QualityAssessmentUtils.identifyCriticalIssues(metrics);
+    const recommendations = QualityAssessmentUtils.generateRecommendations(metrics);
 
     return {
       overall_status,
@@ -413,7 +399,7 @@ export class QualityReportGenerator {
   }
 
   private generateReportId(): string {
-    return `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `qr-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
   }
 }
 

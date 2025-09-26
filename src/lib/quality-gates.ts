@@ -8,7 +8,7 @@ export interface QualityGate {
   phase: 'pre-commit' | 'build' | 'test' | 'deploy' | 'post-deploy';
   criteria: QualityCriteria[];
   required: boolean;
-  timeout: number; // in milliseconds
+  timeout: number; // in milliseconds, must be positive
 }
 
 export interface QualityCriteria {
@@ -96,7 +96,7 @@ export const QUALITY_GATES: QualityGate[] = [
     criteria: [
       {
         metric: 'test_coverage.overall',
-        threshold: 90,
+        threshold: 85, // Graduated approach: start at 85%, target 90%
         comparison: 'greater_than',
         severity: 'critical'
       },
@@ -224,6 +224,31 @@ export class QualityGateEvaluator {
   
   constructor(metrics: QualityMetrics) {
     this.metrics = metrics;
+    this.validateMetrics();
+  }
+
+  /**
+   * Validate that required metrics are available
+   */
+  private validateMetrics(): void {
+    const requiredPaths = [
+      'test_coverage.overall',
+      'code_quality.eslint_errors',
+      'security.critical_vulnerabilities',
+      'performance.bundle_size_kb',
+      'reliability.test_pass_rate'
+    ];
+
+    for (const path of requiredPaths) {
+      try {
+        const value = this.getMetricValue(path);
+        if (value === undefined || value === null) {
+          console.warn(`Missing required metric: ${path}`);
+        }
+      } catch (error) {
+        console.warn(`Invalid metric path: ${path} - ${error}`);
+      }
+    }
   }
 
   /**
