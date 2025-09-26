@@ -6,7 +6,7 @@ export function validateSarif(data: unknown): data is SarifData {
   const d = data as Partial<SarifData> & { [k: string]: unknown };
   if (d.version !== '2.1.0') return false;
   if (!Array.isArray(d.runs)) return false;
-  return d.runs.every((run: any) => Boolean(run && run.tool && run.tool.driver && run.tool.driver.name));
+  return d.runs.every(run => Boolean(run?.tool?.driver?.name));
 }
 
 // Compute freshness summary from repositories (uses last_scan_date)
@@ -20,6 +20,8 @@ export function computeFreshnessSummary(repositories: Repository[]): FreshnessSu
     if (ageHrs <= 24) buckets.fresh24h++;
     else if (ageHrs <= 24*7) buckets.stale7d++;
     else buckets.old++;
+  });
+
   // Weight: fresh=1.0, stale=0.6, old=0.2, never=0
   const total = repositories.length || 1;
   const score = ((buckets.fresh24h*1) + (buckets.stale7d*0.6) + (buckets.old*0.2)) / total * 100;
