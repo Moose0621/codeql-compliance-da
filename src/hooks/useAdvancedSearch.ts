@@ -1,17 +1,158 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import type { Repository, FilterState, FilterOptions, SearchQuery } from '@/types/dashboard';
+
+// URL parameter utilities
+const serializeFiltersToURL = (filterState: FilterState): URLSearchParams => {
+  const params = new URLSearchParams();
+  
+  if (filterState.search.trim()) {
+    params.set('search', filterState.search);
+  }
+  
+  if (filterState.severityFilter) {
+    params.set('severity', filterState.severityFilter);
+  }
+  
+  if (!filterState.showResultsOnly) {
+    params.set('showAll', 'true');
+  }
+  
+  if (filterState.advanced.languages?.length) {
+    params.set('languages', filterState.advanced.languages.join(','));
+  }
+  
+  if (filterState.advanced.topics?.length) {
+    params.set('topics', filterState.advanced.topics.join(','));
+  }
+  
+  if (filterState.advanced.complianceScoreRange) {
+    const [min, max] = filterState.advanced.complianceScoreRange;
+    if (min !== 0 || max !== 100) {
+      params.set('complianceScore', `${min}-${max}`);
+    }
+  }
+  
+  if (filterState.advanced.activityPeriod && filterState.advanced.activityPeriod !== 'all') {
+    params.set('activity', filterState.advanced.activityPeriod);
+  }
+  
+  if (filterState.advanced.lastScanAge && filterState.advanced.lastScanAge !== 'any') {
+    params.set('scanAge', filterState.advanced.lastScanAge);
+  }
+  
+  return params;
+};
+
+const deserializeFiltersFromURL = (searchParams: URLSearchParams): Partial<FilterState> => {
+  const filters: Partial<FilterState> = {
+    advanced: {}
+  };
+  
+  const search = searchParams.get('search');
+  if (search) filters.search = search;
+  
+  const severity = searchParams.get('severity');
+  if (severity) filters.severityFilter = severity;
+  
+  const showAll = searchParams.get('showAll');
+  if (showAll === 'true') filters.showResultsOnly = false;
+  
+  const languages = searchParams.get('languages');
+  if (languages) filters.advanced!.languages = languages.split(',');
+  
+  const topics = searchParams.get('topics');
+  if (topics) filters.advanced!.topics = topics.split(',');
+  
+  const complianceScore = searchParams.get('complianceScore');
+  if (complianceScore) {
+    const [min, max] = complianceScore.split('-').map(Number);
+    filters.advanced!.complianceScoreRange = [min, max];
+  }
+  
+  const activity = searchParams.get('activity');
+  if (activity && ['24h', '7d', '30d', '3m', '6m', '1y', 'all'].includes(activity)) {
+    filters.advanced!.activityPeriod = activity as FilterOptions['activityPeriod'];
+  }
+  
+  const scanAge = searchParams.get('scanAge');
+  if (scanAge && ['1d', '7d', '30d', '90d', 'any'].includes(scanAge)) {
+    filters.advanced!.lastScanAge = scanAge as FilterOptions['lastScanAge'];
+  }
+  
+  return filters;
+};
+
+// Debounce hook for performance
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 /**
  * Advanced search hook with multi-criteria filtering and boolean operators
  * Performance optimized for 1000+ repositories with debounced search
  */
 export function useAdvancedSearch(repositories: Repository[]) {
-  const [filterState, setFilterState] = useState<FilterState>({
-    search: '',
-    severityFilter: null,
-    showResultsOnly: true,
-    advanced: {}
+  const [filterState, setFilterState] = useState<FilterState>(() => {
+    // Initialize from URL parameters first, then localStorage, then defaults
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlFilters = deserializeFiltersFromURL(urlParams);
+    
+    if (Object.keys(urlFilters).length > 0) {
+      return {
+        search: urlFilters.search || '',
+        severityFilter: urlFilters.severityFilter || null,
+        showResultsOnly: urlFilters.showResultsOnly !== undefined ? urlFilters.showResultsOnly : true,
+        advanced: urlFilters.advanced || {}
+      };
+    }
+    
+    // Fallback to localStorage
+    try {
+      const stored = localStorage.getItem('advanced-repo-filters');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          search: parsed.search || '',
+          severityFilter: parsed.severityFilter || null,
+          showResultsOnly: parsed.showResultsOnly !== undefined ? parsed.showResultsOnly : true,
+          advanced: parsed.advanced || {}
+        };
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+    
+    return {
+      search: '',
+      severityFilter: null,
+      showResultsOnly: true,
+      advanced: {}
+    };
   });
+
+  // Persist filter state changes to localStorage and URL
+  useEffect(() => {
+    try {
+      localStorage.setItem('advanced-repo-filters', JSON.stringify(filterState));
+      
+      // Update URL parameters for shareable links
+      const params = serializeFiltersToURL(filterState);
+      const newURL = params.toString() 
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+        
+      window.history.replaceState({}, '', newURL);
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [filterState]);
 
   // Parse search query for boolean operators
   const parseSearchQuery = useCallback((searchText: string): SearchQuery => {
@@ -103,16 +244,19 @@ export function useAdvancedSearch(repositories: Repository[]) {
     }
   }, []);
 
-  // Main filtering logic
+  // Debounce search for performance (300ms delay)
+  const debouncedSearch = useDebounce(filterState.search, 300);
+  
+  // Main filtering logic with performance optimizations
   const filteredRepositories = useMemo(() => {
     let list = [...repositories];
-    const { search, severityFilter, showResultsOnly, advanced } = filterState;
+    const { severityFilter, showResultsOnly, advanced } = filterState;
 
-    // Parse search query
-    const searchQuery = parseSearchQuery(search);
+    // Use debounced search for better performance
+    const searchQuery = parseSearchQuery(debouncedSearch);
 
     // Apply text search with boolean operators
-    if (search.trim()) {
+    if (debouncedSearch.trim()) {
       if (searchQuery.operators.and.length > 0) {
         // AND: all terms must match
         list = list.filter(repo => {
@@ -145,7 +289,7 @@ export function useAdvancedSearch(repositories: Repository[]) {
         });
       } else {
         // Simple text search
-        const q = search.toLowerCase();
+        const q = debouncedSearch.toLowerCase();
         list = list.filter(repo => {
           const searchableText = `${repo.name} ${repo.full_name} ${repo.owner.login}`.toLowerCase();
           return searchableText.includes(q) ||
@@ -178,7 +322,6 @@ export function useAdvancedSearch(repositories: Repository[]) {
         if (searchQuery.fields.status) {
           const hasMatchingStatus = searchQuery.fields.status.some(status => {
             switch (status) {
-              case 'archived': return false; // We don't have this field yet
               case 'needs-attention': return repo.compliance_score !== undefined && repo.compliance_score < 70;
               case 'compliant': return repo.compliance_score !== undefined && repo.compliance_score >= 80;
               case 'has-findings': return hasResults(repo);
@@ -249,7 +392,7 @@ export function useAdvancedSearch(repositories: Repository[]) {
     }
 
     return list;
-  }, [repositories, filterState, parseSearchQuery, hasResults, isWithinActivityPeriod, isWithinScanAge]);
+  }, [repositories, filterState, debouncedSearch, parseSearchQuery, hasResults, isWithinActivityPeriod, isWithinScanAge]);
 
   // Get available filter options from current repositories
   const availableOptions = useMemo((): FilterOptions => {
@@ -304,12 +447,20 @@ export function useAdvancedSearch(repositories: Repository[]) {
     });
   }, []);
 
+  // Generate shareable URL with current filters
+  const getShareableURL = useCallback(() => {
+    const params = serializeFiltersToURL(filterState);
+    const baseURL = `${window.location.origin}${window.location.pathname}`;
+    return params.toString() ? `${baseURL}?${params.toString()}` : baseURL;
+  }, [filterState]);
+
   return {
     filterState,
     filteredRepositories,
     availableOptions,
     updateFilters,
     clearFilters,
-    parseSearchQuery
+    parseSearchQuery,
+    getShareableURL
   };
 }

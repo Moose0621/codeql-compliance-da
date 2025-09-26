@@ -402,7 +402,7 @@ export class GitHubService {
       const response = await this.makeRequest<Record<string, number>>(
         `/repos/${this.config.organization}/${repoName}/languages`,
         {},
-        { cacheTTL: 300_000 } // Cache for 5 minutes since languages don't change often
+        { cacheTTL: 3600_000 } // Cache for 1 hour since languages don't change often
       );
       
       // Return languages sorted by usage (descending)

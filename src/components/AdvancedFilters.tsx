@@ -15,7 +15,8 @@ import {
   Shield,
   Clock,
   Tag,
-  Code
+  Code,
+  Share
 } from '@phosphor-icons/react';
 import type { FilterState, FilterOptions } from '@/types/dashboard';
 
@@ -26,6 +27,7 @@ interface AdvancedFiltersProps {
   onClearFilters: () => void;
   resultsCount: number;
   totalCount: number;
+  onGetShareableURL?: () => string;
 }
 
 export function AdvancedFilters({
@@ -34,7 +36,8 @@ export function AdvancedFilters({
   onFilterChange,
   onClearFilters,
   resultsCount,
-  totalCount
+  totalCount,
+  onGetShareableURL
 }: AdvancedFiltersProps) {
   const { search, severityFilter, showResultsOnly, advanced } = filterState;
 
@@ -60,6 +63,28 @@ export function AdvancedFilters({
     });
   };
 
+  // Handle share button
+  const handleShare = async () => {
+    if (!onGetShareableURL) return;
+    
+    const url = onGetShareableURL();
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        // Show success toast - you may want to add a toast system
+        console.log('Filter URL copied to clipboard!');
+      } catch (err) {
+        console.error('Failed to copy URL:', err);
+        // Fallback to manual copy
+        window.prompt('Copy this URL to share your filters:', url);
+      }
+    } else {
+      // Fallback for browsers without clipboard API
+      window.prompt('Copy this URL to share your filters:', url);
+    }
+  };
+
   // Check if any filters are active
   const hasActiveFilters = !!(
     search.trim() ||
@@ -82,6 +107,17 @@ export function AdvancedFilters({
             <span className="text-sm text-muted-foreground">
               Showing {resultsCount} of {totalCount}
             </span>
+            {onGetShareableURL && hasActiveFilters && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleShare}
+                className="h-8 px-3"
+              >
+                <Share size={14} className="mr-1" />
+                Share Filters
+              </Button>
+            )}
             {hasActiveFilters && (
               <Button 
                 variant="outline" 
