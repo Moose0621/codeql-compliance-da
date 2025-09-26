@@ -27,6 +27,7 @@ import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RepositoryDetailsDialog } from '@/components/RepositoryDetailsDialog';
 import { NotificationCenter } from '@/components/NotificationCenter';
+import { NotificationPreferences } from '@/components/NotificationPreferences';
 import { Input } from '@/components/ui/input';
 import { Toggle } from '@/components/ui/toggle';
 
@@ -696,8 +697,16 @@ function App() {
           </TabsContent>
 
           <TabsContent value="notifications" className="space-y-6">
-            <div className="max-w-4xl">
-              <NotificationCenter maxHeight="600px" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl">
+              {/* Main Notification Center */}
+              <div className="lg:col-span-2">
+                <NotificationCenter maxHeight="600px" />
+              </div>
+              
+              {/* Notification Preferences Sidebar */}
+              <div>
+                <NotificationPreferences />
+              </div>
             </div>
           </TabsContent>
         </Tabs>
