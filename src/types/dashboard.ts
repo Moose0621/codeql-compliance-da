@@ -133,6 +133,80 @@ export interface ComplianceReport {
   };
 }
 
+export interface ExecutiveSummaryReport {
+  id: string;
+  generated_at: string;
+  generated_by: string;
+  organization: string;
+  report_period: {
+    start_date: string;
+    end_date: string;
+  };
+  executive_summary: {
+    security_posture: 'excellent' | 'good' | 'needs_attention' | 'critical';
+    total_repositories: number;
+    scan_coverage_percent: number;
+    critical_issues: number;
+    high_issues: number;
+    risk_score: number; // 0-100
+    trending: 'improving' | 'stable' | 'declining';
+  };
+  key_metrics: {
+    repositories_scanned_30d: number;
+    median_scan_time_minutes: number;
+    compliance_percentage: number;
+    issues_resolved_30d: number;
+  };
+  recommendations: string[];
+  compliance_status: {
+    fedramp_compliant: boolean;
+    areas_for_improvement: string[];
+  };
+}
+
+export interface TechnicalDetailReport {
+  id: string;
+  generated_at: string;
+  generated_by: string;
+  organization: string;
+  report_period: {
+    start_date: string;
+    end_date: string;
+  };
+  repository_findings: Array<{
+    repository: Repository;
+    scan_details: {
+      last_scan_date: string;
+      scan_status: 'success' | 'failure' | 'pending';
+      duration_minutes: number;
+      commit_sha: string;
+      codeql_version: string;
+    };
+    findings_breakdown: SecurityFindings;
+    top_vulnerabilities: Array<{
+      rule_id: string;
+      severity: 'critical' | 'high' | 'medium' | 'low' | 'note';
+      title: string;
+      description: string;
+      locations_count: number;
+      cwe_id?: string;
+    }>;
+    remediation_guidance: string[];
+  }>;
+  aggregate_metrics: {
+    total_scan_time_hours: number;
+    average_findings_per_repo: number;
+    most_common_vulnerabilities: Array<{
+      rule_id: string;
+      occurrences: number;
+      affected_repos: number;
+    }>;
+  };
+}
+
+export type ReportType = 'executive' | 'technical' | 'compliance';
+export type ReportFormat = 'pdf' | 'html' | 'csv' | 'json';
+
 // SARIF and Default Setup Analysis Types
 export interface SarifAnalysis {
   id: number;
@@ -242,4 +316,4 @@ export interface FreshnessSummary {
   generated_at: string;
 }
 
-export type ExportFormat = 'pdf' | 'csv' | 'json' | 'xlsx';
+export type ExportFormat = 'pdf' | 'html' | 'csv' | 'json' | 'xlsx';

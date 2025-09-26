@@ -9,6 +9,7 @@ import { RepositoryCard } from "@/components/RepositoryCard";
 import { SecurityChart } from "@/components/SecurityChart";
 import { ResultsFreshnessPanel } from '@/components/ResultsFreshnessPanel';
 import { SarifExportPanel } from '@/components/SarifExportPanel';
+import { ReportGenerationPanel } from '@/components/ReportGenerationPanel';
 import { AuditTrail } from "@/components/AuditTrail";
 import { ExportDialog } from "@/components/ExportDialog";
 import { QuickExport } from "@/components/QuickExport";
@@ -597,10 +598,11 @@ function App() {
                     critical: 0, high: 0, medium: 0, low: 0, note: 0, total: 0
                   })} 
                 />
-                <SarifExportPanel repositories={repositories} token={githubConfig?.token} organization={githubConfig?.organization} />
+                <ReportGenerationPanel repositories={repositories} organization={githubConfig?.organization} />
               </div>
               <div className="space-y-6">
                 <ResultsFreshnessPanel repositories={repositories} />
+                <SarifExportPanel repositories={repositories} token={githubConfig?.token} organization={githubConfig?.organization} />
               </div>
             </div>
           </TabsContent>
