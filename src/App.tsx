@@ -336,8 +336,8 @@ function App() {
       const raw = localStorage.getItem('repo-filters');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.search) setSearch(parsed.search);
-        if (parsed.severityFilter) setSeverityFilter(parsed.severityFilter);
+        if ('search' in parsed) setSearch(parsed.search);
+        if ('severityFilter' in parsed) setSeverityFilter(parsed.severityFilter);
         if (typeof parsed.showResultsOnly === 'boolean') setShowResultsOnly(parsed.showResultsOnly);
       }
     } catch {
