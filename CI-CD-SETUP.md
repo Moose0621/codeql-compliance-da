@@ -127,6 +127,37 @@ github-installation-id   # Installation ID
 github-app-private-key   # Private key (PEM format)
 ```
 
+## 🔑 GitHub Personal Access Token Requirements
+
+**For Local Development & Manual Operations:**
+
+### Classic Personal Access Token (PAT) - Required Scopes:
+- `repo` - Full control of private repositories (required for repository access)
+- `workflow` - Update GitHub Action workflows (required for workflow dispatch)
+
+### Fine-grained Personal Access Token - Required Permissions:
+- **Actions**: Read and write (enables workflow dispatch)
+- **Contents**: Read (enables repository content access)
+- **Pull requests**: Read (if using PR-related features)
+
+### Common Issues & Solutions:
+- **403 "Resource not accessible by personal access token"**: Missing `workflow` scope on classic PAT or insufficient Actions permissions on fine-grained PAT
+- **403 "Workflow dispatch failed"**: Repository Actions settings may be set to "Read" only - change to "Read and write" in Settings > Actions > General > Workflow permissions
+- **Organization SSO**: If using organization repositories, ensure your PAT is authorized for SSO via Settings > Developer settings > Personal access tokens
+
+### Testing Your Token:
+```bash
+# Test workflow dispatch permissions
+curl -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Accept: application/vnd.github+json" \
+  https://api.github.com/repos/OWNER/REPO/actions/workflows/WORKFLOW_ID/dispatches \
+  -d '{"ref":"main"}'
+```
+Expected response: HTTP 204 (success) or specific error guidance.
+
+**📖 See `docs/workflow-dispatch-troubleshooting.md` for comprehensive troubleshooting guide.**
+
 ## 📊 CI/CD Pipeline Overview
 
 ```

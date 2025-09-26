@@ -1,4 +1,4 @@
-import type { Repository, ComplianceReport, ExportFormat } from "@/types/dashboard";
+import type { Repository, ComplianceReport } from "@/types/dashboard";
 
 export class ComplianceReportGenerator {
   static generateReport(repositories: Repository[], organizationName: string = "Enterprise Organization"): ComplianceReport {

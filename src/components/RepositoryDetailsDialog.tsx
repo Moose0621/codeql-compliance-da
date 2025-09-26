@@ -6,7 +6,35 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowSquareOut, Clock, Shield, Activity } from '@phosphor-icons/react';
 import { createGitHubService } from '@/lib/github-service';
-import type { Repository, WorkflowRun, SecurityFindings } from '@/types/dashboard';
+import type { Repository, WorkflowRun, SecurityFindings, SarifAnalysis } from '@/types/dashboard';
+import React from 'react';
+
+// Utility function to generate SVG path for trend line
+function generateTrendLinePath(values: number[], max: number): string {
+  return values.map((v, i) => {
+    const x = (i / Math.max(1, values.length - 1)) * 100;
+    const y = 30 - (v / max) * 30;
+    return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(' ');
+}
+
+// Lightweight inline trend line component (no extra lib)
+function TrendLine({ data }: { data: SarifAnalysis[] }) {
+  const points = data.slice(-12); // limit
+  const values = points.map(p => p.results_count);
+  const max = Math.max(1, ...values);
+  const path = generateTrendLinePath(values, max);
+  return (
+    <svg viewBox="0 0 100 30" className="w-full h-20">
+      <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      {values.map((v,i)=>{
+        const x = (i/(Math.max(1, values.length-1)))*100;
+        const y = 30 - (v/max)*30;
+        return <circle key={i} cx={x} cy={y} r={1.8} fill="hsl(var(--primary))" />;
+      })}
+    </svg>
+  );
+}
 
 interface RepositoryDetailsDialogProps {
   open: boolean;
@@ -21,6 +49,11 @@ export function RepositoryDetailsDialog({ open, onOpenChange, repository, token,
   const [findings, setFindings] = useState<SecurityFindings | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<SarifAnalysis | null>(null);
+  const [historical, setHistorical] = useState<SarifAnalysis[]>([]);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [sarifDownloading, setSarifDownloading] = useState(false);
+  const [sarifError, setSarifError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,13 +63,17 @@ export function RepositoryDetailsDialog({ open, onOpenChange, repository, token,
       setError(null);
       try {
         const svc = createGitHubService(token, organization);
-        const [runsResp, findingsResp] = await Promise.all([
+        const [runsResp, findingsResp, analysisMeta, historyResp] = await Promise.all([
           svc.getWorkflowRuns(repository.name, 'codeql', 1, 10),
-          svc.getSecurityFindings(repository.name)
+          svc.getSecurityFindings(repository.name),
+          svc.analyzeRepositorySetup(repository.name),
+          svc.getHistoricalAnalyses(repository.name, 30)
         ]);
         if (!cancelled) {
           setRuns(runsResp);
           setFindings(findingsResp);
+          setAnalysis(analysisMeta.latestAnalysis || null);
+          setHistorical(historyResp);
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load details');
@@ -47,6 +84,44 @@ export function RepositoryDetailsDialog({ open, onOpenChange, repository, token,
     load();
     return () => { cancelled = true; };
   }, [open, repository, token, organization]);
+
+  const refreshAnalysis = async () => {
+    if (!repository || !token || !organization) return;
+    setAnalysisLoading(true);
+    setSarifError(null);
+    try {
+      const svc = createGitHubService(token, organization);
+      const meta = await svc.analyzeRepositorySetup(repository.name);
+      const hist = await svc.getHistoricalAnalyses(repository.name, 30);
+      setAnalysis(meta.latestAnalysis || null);
+      setHistorical(hist);
+    } catch (e) {
+      setSarifError(e instanceof Error ? e.message : 'Failed to refresh analysis');
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  const downloadSarif = async () => {
+    if (!repository || !token || !organization || !analysis) return;
+    setSarifDownloading(true);
+    setSarifError(null);
+    try {
+      const svc = createGitHubService(token, organization);
+      const sarif = await svc.getSarifData(repository.name, analysis.id);
+      const blob = new Blob([JSON.stringify(sarif, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${repository.name}-codeql-${analysis.id}.sarif.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setSarifError(e instanceof Error ? e.message : 'Failed to download SARIF');
+    } finally {
+      setSarifDownloading(false);
+    }
+  };
 
   if (!repository) return null;
 
@@ -131,6 +206,59 @@ export function RepositoryDetailsDialog({ open, onOpenChange, repository, token,
                 </CardContent>
               </Card>
             </div>
+
+            <Card>
+              <CardHeader className="pb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <CardTitle className="text-sm">Latest CodeQL Analysis</CardTitle>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={refreshAnalysis} disabled={analysisLoading}>
+                    {analysisLoading ? 'Refreshing…' : 'Refresh'}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={downloadSarif} disabled={!analysis || sarifDownloading}>
+                    {sarifDownloading ? 'Preparing…' : 'Download SARIF'}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="text-sm space-y-3">
+                {sarifError && <p className="text-red-600 text-xs">{sarifError}</p>}
+                {!analysis && !analysisLoading && <p className="text-muted-foreground">No analysis detected in the last 30 days.</p>}
+                {analysisLoading && <p className="text-muted-foreground animate-pulse">Loading analysis…</p>}
+                {analysis && !analysisLoading && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Analysis ID</p>
+                      <p className="font-mono text-xs truncate">{analysis.id}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Results</p>
+                      <p className="font-semibold">{analysis.results_count}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Rules</p>
+                      <p className="font-semibold">{analysis.rules_count}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Commit</p>
+                      <p className="font-mono text-xs truncate">{analysis.commit_sha.slice(0,7)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Ref</p>
+                      <p className="font-mono text-xs truncate">{analysis.ref.replace('refs/heads/','')}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Date</p>
+                      <p>{new Date(analysis.created_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                )}
+                {historical.length > 1 && (
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground mb-1">Result Trend (last {historical.length})</p>
+                    <TrendLine data={historical} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="flex justify-end">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>

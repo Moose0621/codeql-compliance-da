@@ -12,7 +12,9 @@ interface RepositoryCardProps {
   repository: Repository;
   onDispatchScan: (repo: Repository) => void;
   onViewDetails: (repo: Repository) => void;
+  onRefreshLatest?: (repo: Repository) => void; // for Default Setup refresh
   isScanning?: boolean;
+  isRefreshing?: boolean;
   scanHistory?: Array<{ timestamp: string; findingsTotal?: number }>;
 }
 
@@ -20,11 +22,17 @@ export function RepositoryCard({
   repository, 
   onDispatchScan, 
   onViewDetails, 
+  onRefreshLatest,
   isScanning = false,
+  isRefreshing = false,
   scanHistory = []
 }: RepositoryCardProps) {
-  const handleDispatchScan = () => {
-    onDispatchScan(repository);
+  const handlePrimaryAction = () => {
+    if (repository.workflow_dispatch_enabled) {
+      onDispatchScan(repository);
+    } else if (onRefreshLatest) {
+      onRefreshLatest(repository);
+    }
   };
 
   const handleViewDetails = () => {
@@ -89,12 +97,14 @@ export function RepositoryCard({
 
         <div className="flex gap-2 pt-2">
           <Button
-            onClick={handleDispatchScan}
-            disabled={isScanning || repository.last_scan_status === 'in_progress'}
+            onClick={handlePrimaryAction}
+            disabled={repository.workflow_dispatch_enabled ? (isScanning || repository.last_scan_status === 'in_progress') : isRefreshing}
             className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground"
           >
             <Play size={16} className="mr-2" />
-            {isScanning || repository.last_scan_status === 'in_progress' ? 'Scanning...' : 'Request Scan'}
+            {repository.workflow_dispatch_enabled
+              ? (isScanning || repository.last_scan_status === 'in_progress' ? 'Scanning...' : 'Request Scan')
+              : (isRefreshing ? 'Refreshing...' : 'Refresh Results')}
           </Button>
           
           <Button
