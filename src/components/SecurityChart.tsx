@@ -24,6 +24,30 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
     total: 0
   });
 
+  const formatFindingCount = (count: number, label: string) => {
+    if (count === 0) return '';
+    return `${count} ${label}${count === 1 ? '' : 's'}`;
+  };
+
+  const pieChartLabel = [
+    'Security findings pie chart showing',
+    `${aggregateFindings.total} total ${aggregateFindings.total === 1 ? 'finding' : 'findings'}:`,
+    formatFindingCount(aggregateFindings.critical, 'critical'),
+    formatFindingCount(aggregateFindings.high, 'high'), 
+    formatFindingCount(aggregateFindings.medium, 'medium'),
+    formatFindingCount(aggregateFindings.low, 'low'),
+    formatFindingCount(aggregateFindings.note, 'note')
+  ].filter(Boolean).join(' ');
+
+  const barChartLabel = [
+    'Security findings bar chart showing counts by severity:',
+    formatFindingCount(aggregateFindings.critical, 'Critical'),
+    formatFindingCount(aggregateFindings.high, 'High'),
+    formatFindingCount(aggregateFindings.medium, 'Medium'), 
+    formatFindingCount(aggregateFindings.low, 'Low'),
+    formatFindingCount(aggregateFindings.note, 'Note')
+  ].filter(Boolean).join(' ');
+
   const pieData = [
     { name: 'Critical', value: aggregateFindings.critical, color: '#dc2626' },
     { name: 'High', value: aggregateFindings.high, color: '#ea580c' },
@@ -48,27 +72,29 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
         </CardHeader>
         <CardContent>
           {aggregateFindings.total > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <div role="img" aria-label={pieChartLabel}>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
-            <div className="flex items-center justify-center h-[200px] text-muted-foreground">
+            <div className="flex items-center justify-center h-[200px] text-muted-foreground" role="status" aria-label="No security findings to display">
               No security findings
             </div>
           )}
@@ -80,14 +106,16 @@ export function SecurityChart({ findings, title = "Security Findings Overview" }
           <CardTitle className="text-lg font-semibold">Finding Counts</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData}>
-              <XAxis dataKey="severity" />
-              <YAxis />
-              <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div role="img" aria-label={barChartLabel}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={barData}>
+                <XAxis dataKey="severity" />
+                <YAxis />
+                <Tooltip formatter={(value) => [`${value} findings`, 'Count']} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -63,15 +63,25 @@ export function SarifExportPanel({ repositories, token, organization }: SarifExp
   };
 
   return (
-    <Card>
+    <Card aria-busy={isExporting}>
       <CardHeader className="pb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <CardTitle className="text-lg font-semibold">Aggregated SARIF Export</CardTitle>
-        <Button size="sm" onClick={handleExport} disabled={isExporting || !token || !organization}>
+        <Button 
+          size="sm" 
+          onClick={handleExport} 
+          disabled={isExporting || !token || !organization}
+          aria-label={isExporting ? 'Export in progress' : 'Export SARIF data'}
+        >
           {isExporting ? 'Exporting…' : 'Export SARIF'}
         </Button>
       </CardHeader>
       <CardContent className="text-sm space-y-2">
         <p>Build a single JSON artifact containing latest CodeQL SARIF (where available) per repository (max 50 for now).</p>
+        {isExporting && (
+          <p className="text-sm text-primary font-medium" aria-live="polite" role="status">
+            Processing SARIF data from repositories...
+          </p>
+        )}
         {lastExportSize !== null && (
           <p className="text-xs text-muted-foreground">Last export size: {(lastExportSize/1024).toFixed(1)} KB</p>
         )}
