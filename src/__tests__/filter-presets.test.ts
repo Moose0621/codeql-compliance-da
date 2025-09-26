@@ -319,8 +319,28 @@ describe('Filter Presets - Advanced Search System', () => {
 
     it('should delete custom presets', () => {
       const presets = [
-        { id: 'preset1', name: 'Preset 1', description: 'Test', filters: {} },
-        { id: 'preset2', name: 'Preset 2', description: 'Test', filters: {} }
+        { 
+          id: 'preset1', 
+          name: 'Preset 1', 
+          description: 'Test preset 1', 
+          filters: {
+            search: 'test1',
+            severityFilter: null,
+            showResultsOnly: false,
+            advanced: {}
+          }
+        },
+        { 
+          id: 'preset2', 
+          name: 'Preset 2', 
+          description: 'Test preset 2', 
+          filters: {
+            search: 'test2',
+            severityFilter: null,
+            showResultsOnly: true,
+            advanced: {}
+          }
+        }
       ];
 
       mockPresetStorage.set('custom-filter-presets', JSON.stringify(presets));
@@ -438,9 +458,19 @@ describe('Filter Presets - Advanced Search System', () => {
 
     it('should handle invalid preset data gracefully', () => {
       const invalidPresets = [
-        { id: '', name: 'Empty ID', description: 'Test', filters: {} },
-        { id: 'no-name', name: '', description: 'Test', filters: {} },
-        { id: 'no-filters', name: 'No Filters', description: 'Test' }
+        { id: '', name: 'Empty ID', description: 'Test', filters: {
+          search: '',
+          severityFilter: null,
+          showResultsOnly: false,
+          advanced: {}
+        }},
+        { id: 'no-name', name: '', description: 'Test', filters: {
+          search: '',
+          severityFilter: null,
+          showResultsOnly: false,
+          advanced: {}
+        }},
+        { id: 'no-filters', name: 'No Filters', description: 'Test', filters: undefined as any }
       ];
 
       invalidPresets.forEach(preset => {
