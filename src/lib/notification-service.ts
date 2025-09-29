@@ -1,12 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { 
-  Notification, 
   NotificationPreferences, 
   NotificationHistory,
   NotificationAction,
   SecurityFindings,
   Repository
 } from '@/types/dashboard';
+import type { Notification } from '@/types/dashboard';
 import { logInfo, logWarn, logError } from './logger';
 
 /**
