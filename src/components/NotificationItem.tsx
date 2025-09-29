@@ -57,21 +57,6 @@ export function NotificationItem({
     }
   };
 
-  const getSeverityIcon = () => {
-    switch (notification.severity) {
-      case 'critical':
-        return <Shield size={16} className="text-red-600" />;
-      case 'high':
-        return <Warning size={16} className="text-orange-500" />;
-      case 'medium':
-        return <Info size={16} className="text-yellow-500" />;
-      case 'low':
-        return <Info size={16} className="text-blue-500" />;
-      default:
-        return <Info size={16} className="text-gray-500" />;
-    }
-  };
-
   const getTypeIcon = () => {
     switch (notification.type) {
       case 'security_alert':
@@ -134,7 +119,7 @@ export function NotificationItem({
       <div className="flex items-start gap-3">
         {/* Type/Severity Icon */}
         <div className="flex-shrink-0 mt-0.5">
-          {getSeverityIcon()}
+          {getTypeIcon()}
         </div>
 
         {/* Content */}

@@ -15,7 +15,6 @@ import {
   Trash, 
   Shield,
   ArrowClockwise,
-  Warning,
   Info,
   FunnelSimple
 } from '@phosphor-icons/react';
@@ -23,7 +22,6 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { notificationService } from '@/lib/notification-service';
 import { NotificationItem } from './NotificationItem';
 import { NotificationFilters } from './NotificationFilters';
-import type { Notification } from '@/types/dashboard';
 
 interface NotificationCenterProps {
   className?: string;

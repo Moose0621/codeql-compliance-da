@@ -18,7 +18,7 @@ import { GitHubConnection } from "@/components/GitHubConnection";
 import { RealtimeNotifications } from "@/components/RealtimeNotifications";
 import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { FilterPresets } from "@/components/FilterPresets";
-import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, FunnelSimple, MagnifyingGlass, Bell } from "@phosphor-icons/react";
+import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, Bell } from "@phosphor-icons/react";
 import { toast } from "sonner";
 // Replaced Spark KV with localStorage persistence
 import { usePersistentConfig } from '@/hooks/usePersistentConfig';
@@ -33,8 +33,6 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { RepositoryDetailsDialog } from '@/components/RepositoryDetailsDialog';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { NotificationPreferences } from '@/components/NotificationPreferences';
-import { Input } from '@/components/ui/input';
-import { Toggle } from '@/components/ui/toggle';
 
 interface GitHubConfig {
   token: string;
@@ -72,7 +70,7 @@ function App() {
   const { unreadCount, hasUnread } = useNotifications();
 
   // Real-time updates hook for webhook integration
-  const { isConnected: isWebhookConnected } = useRealTimeUpdates({
+  useRealTimeUpdates({
     autoConnect: githubConfig?.isConnected ?? false,
     showToastNotifications: true,
     onRepositoryUpdate: (repositoryId, status, findings) => {
@@ -358,7 +356,7 @@ function App() {
               <>
                 <RealtimeNotifications 
                   autoConnect={true}
-                  onRepositoryUpdate={(repositoryId, status, findings) => {
+                  onRepositoryUpdate={(_repositoryId, _status, _findings) => {
                     // This is handled by the main useRealTimeUpdates hook above
                     // but we can add additional UI-specific handling here
                   }}
