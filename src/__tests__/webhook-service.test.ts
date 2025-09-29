@@ -31,10 +31,10 @@ const mockEventSource = vi.fn().mockImplementation((url, options) => {
   return instance;
 });
 
-// Add EventSource constants
-mockEventSource.CONNECTING = 0;
-mockEventSource.OPEN = 1;
-mockEventSource.CLOSED = 2;
+// Add EventSource constants with proper typing
+(mockEventSource as any).CONNECTING = 0;
+(mockEventSource as any).OPEN = 1;
+(mockEventSource as any).CLOSED = 2;
 
 Object.defineProperty(global, 'EventSource', {
   value: mockEventSource,
