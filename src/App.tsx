@@ -15,12 +15,14 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { QuickExport } from "@/components/QuickExport";
 import { ExportStatus } from "@/components/ExportStatus";
 import { GitHubConnection } from "@/components/GitHubConnection";
+import { RealtimeNotifications } from "@/components/RealtimeNotifications";
 import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { FilterPresets } from "@/components/FilterPresets";
 import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
 import { toast } from "sonner";
 // Replaced Spark KV with localStorage persistence
 import { usePersistentConfig } from '@/hooks/usePersistentConfig';
+import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 import { useAdvancedSearch } from '@/hooks/useAdvancedSearch';
 import { getEnvConfig } from '@/lib/env-config';
 import { createGitHubService } from '@/lib/github-service';
@@ -61,6 +63,55 @@ function App() {
   const [detailsRepo, setDetailsRepo] = useState<Repository | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 30;
+
+  // Real-time updates hook for webhook integration
+  const { isConnected: isWebhookConnected } = useRealTimeUpdates({
+    autoConnect: githubConfig?.isConnected ?? false,
+    showToastNotifications: true,
+    onRepositoryUpdate: (repositoryId, status, findings) => {
+      // Update repository status in real-time
+      setRepositories(prev => prev.map(repo =>
+        repo.id === repositoryId 
+          ? { 
+              ...repo, 
+              last_scan_status: status,
+              last_scan_date: new Date().toISOString(),
+              security_findings: findings || repo.security_findings
+            }
+          : repo
+      ));
+
+      // Remove from scanning repos when completed
+      if (status === 'success' || status === 'failure') {
+        setScanningRepos(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(repositoryId);
+          return newSet;
+        });
+
+        // Update scan requests
+        setScanRequests(prev => (prev || []).map(req => {
+          const matchingRepo = repositories.find(r => r.id === repositoryId);
+          if (req.repository === matchingRepo?.full_name && req.status === 'running') {
+            return {
+              ...req,
+              status: 'completed' as const,
+              duration: Math.round((new Date().getTime() - new Date(req.timestamp).getTime()) / 1000 / 60),
+              findings: findings
+            };
+          }
+          return req;
+        }));
+      }
+    },
+    onScanRequestUpdate: (scanRequest) => {
+      if (scanRequest.id) {
+        setScanRequests(prev => (prev || []).map(req => 
+          req.id === scanRequest.id ? { ...req, ...scanRequest } : req
+        ));
+      }
+    }
+  });
 
   // Advanced search hook replaces individual filter states
   const {
@@ -178,50 +229,8 @@ function App() {
 
       toast.success(`CodeQL scan dispatched for ${repository.name}`);
 
-      // Poll for completion (in a real app, you might use webhooks)
-      setTimeout(async () => {
-        try {
-          // Check if scan has completed by fetching latest workflow runs
-          const runs = await githubService.getWorkflowRuns(repository.name, 'codeql', 1, 1);
-          const latestRun = runs[0];
-          
-          if (latestRun && (latestRun.status === 'completed' || latestRun.conclusion)) {
-            const securityFindings = await githubService.getSecurityFindings(repository.name);
-            
-            const completedRequest: ScanRequest = {
-              ...runningRequest,
-              status: 'completed',
-              duration: Math.round((new Date().getTime() - new Date(scanRequest.timestamp).getTime()) / 1000 / 60), // minutes
-              findings: securityFindings
-            };
-
-            setScanRequests(prev => (prev || []).map(req => 
-              req.id === scanRequest.id ? completedRequest : req
-            ));
-
-            setRepositories(prev => prev.map(repo =>
-              repo.id === repository.id 
-                ? { 
-                    ...repo, 
-                    last_scan_status: latestRun.conclusion === 'success' ? 'success' as const : 'failure' as const,
-                    last_scan_date: latestRun.updated_at,
-                    security_findings: securityFindings
-                  }
-                : repo
-            ));
-
-            toast.success(`CodeQL scan completed for ${repository.name}`);
-          }
-        } catch (error) {
-          console.error('Failed to check scan completion:', error);
-        }
-        
-        setScanningRepos(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(repository.id);
-          return newSet;
-        });
-      }, 30000); // Check after 30 seconds
+      // Real-time updates will handle completion notification
+      // No more polling needed - webhook integration will update status automatically
 
     } catch (error) {
       console.error('Failed to dispatch scan:', error);
@@ -335,6 +344,13 @@ function App() {
           <div className="flex items-center gap-3">
             {githubConfig?.isConnected && (
               <>
+                <RealtimeNotifications 
+                  autoConnect={true}
+                  onRepositoryUpdate={(repositoryId, status, findings) => {
+                    // This is handled by the main useRealTimeUpdates hook above
+                    // but we can add additional UI-specific handling here
+                  }}
+                />
                 <ExportStatus exportHistory={exportHistory || []} />
                 <QuickExport repositories={repositories} />
                 <ExportDialog repositories={repositories} onExport={handleExportReport} />
