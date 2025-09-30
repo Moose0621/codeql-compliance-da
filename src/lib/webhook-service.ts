@@ -2,9 +2,7 @@ import type {
   GitHubWorkflowEvent, 
   WebhookNotification, 
   RealtimeUpdate, 
-  Repository, 
-  ScanRequest, 
-  SecurityFindings 
+  Repository 
 } from '@/types/dashboard';
 import { GitHubService, createGitHubService } from './github-service';
 import { logWarn, logError } from './logger';

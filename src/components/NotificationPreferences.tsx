@@ -31,7 +31,7 @@ export function NotificationPreferences({ className = '' }: NotificationPreferen
     preferences,
     toggleChannel,
     toggleCategory,
-    updateCategoryChannels,
+    // updateCategoryChannels, // Reserved for future use
     updateMinSeverity,
     updateQuietHours,
     updateEmailSettings,
@@ -97,7 +97,7 @@ export function NotificationPreferences({ className = '' }: NotificationPreferen
         { skipDelivery: false }
       );
       toast.success('Test notification sent');
-    } catch (error) {
+    } catch {
       toast.error('Failed to send test notification');
     }
   };

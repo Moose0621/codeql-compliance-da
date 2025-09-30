@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
+// import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates'; // Reserved for future hook tests
 import type { RealtimeUpdate, WebhookNotification } from '@/types/dashboard';
 
 // Mock the webhook service
