@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { FilterPreset, FilterState, Repository } from '@/types/dashboard';
+import type { FilterPreset, Repository } from '@/types/dashboard';
 
 // Filter Presets Tests - Test Strategy for Advanced Filtering System
 describe('Filter Presets - Advanced Search System', () => {
@@ -566,7 +566,7 @@ describe('Filter Presets - Advanced Search System', () => {
   describe('Preset UI Integration', () => {
     it('should provide preset metadata for UI rendering', () => {
       defaultPresets.forEach(preset => {
-        expect(preset.name).toMatch(/^[A-Za-z0-9\s\-]+$/); // User-friendly name
+        expect(preset.name).toMatch(/^[A-Za-z0-9\s-]+$/); // User-friendly name
         expect(preset.description.length).toBeGreaterThan(10); // Meaningful description
         expect(preset.description.length).toBeLessThan(100); // Not too long for UI
         

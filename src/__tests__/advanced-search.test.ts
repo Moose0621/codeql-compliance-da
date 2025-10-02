@@ -809,7 +809,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
 
     it('should handle filter addition sequence', () => {
       // State 1: No filters
-      let state1 = filterRepositories(mockRepositories, {
+      const state1 = filterRepositories(mockRepositories, {
         search: '',
         severityFilter: null,
         showResultsOnly: false,
@@ -817,7 +817,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
       });
       
       // State 2: Add search
-      let state2 = filterRepositories(mockRepositories, {
+      const state2 = filterRepositories(mockRepositories, {
         search: 'app',
         severityFilter: null,
         showResultsOnly: false,
@@ -825,7 +825,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
       });
       
       // State 3: Add severity filter
-      let state3 = filterRepositories(mockRepositories, {
+      const state3 = filterRepositories(mockRepositories, {
         search: 'app',
         severityFilter: 'critical',
         showResultsOnly: false,
@@ -833,7 +833,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
       });
       
       // State 4: Add advanced filter
-      let state4 = filterRepositories(mockRepositories, {
+      const state4 = filterRepositories(mockRepositories, {
         search: 'app',
         severityFilter: 'critical',
         showResultsOnly: false,
@@ -848,7 +848,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
 
     it('should handle filter removal sequence', () => {
       // Start with all filters
-      let allFilters = filterRepositories(mockRepositories, {
+      const allFilters = filterRepositories(mockRepositories, {
         search: 'typescript',
         severityFilter: 'critical',
         showResultsOnly: true,
@@ -856,7 +856,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
       });
       
       // Remove advanced filter
-      let noAdvanced = filterRepositories(mockRepositories, {
+      const noAdvanced = filterRepositories(mockRepositories, {
         search: 'typescript',
         severityFilter: 'critical',
         showResultsOnly: true,
@@ -864,7 +864,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
       });
       
       // Remove severity filter
-      let noSeverity = filterRepositories(mockRepositories, {
+      const noSeverity = filterRepositories(mockRepositories, {
         search: 'typescript',
         severityFilter: null,
         showResultsOnly: true,
@@ -872,7 +872,7 @@ describe('Advanced Search - ISTQB Framework Coverage', () => {
       });
       
       // Remove results-only filter
-      let noResultsOnly = filterRepositories(mockRepositories, {
+      const noResultsOnly = filterRepositories(mockRepositories, {
         search: 'typescript',
         severityFilter: null,
         showResultsOnly: false,

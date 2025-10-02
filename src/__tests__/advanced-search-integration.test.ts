@@ -368,7 +368,7 @@ describe('Advanced Search Integration Tests', () => {
         if (stored) {
           restored = JSON.parse(stored);
         }
-      } catch (error) {
+      } catch {
         // Handle parsing error gracefully
         restored = null;
       }
@@ -584,7 +584,7 @@ describe('Advanced Search Integration Tests', () => {
     });
 
     it('should handle filter combinations that result in empty results', () => {
-      const impossibleFilterState: FilterState = {
+      const _impossibleFilterState: FilterState = {
         search: 'language:nonexistent',
         severityFilter: 'critical',
         showResultsOnly: true,
@@ -597,7 +597,7 @@ describe('Advanced Search Integration Tests', () => {
       let filteredRepos = [...mockRepositories];
 
       // This should result in no matches
-      filteredRepos = filteredRepos.filter(repo => false); // Simulate no matches
+      filteredRepos = filteredRepos.filter(_repo => false); // Simulate no matches
 
       expect(filteredRepos).toHaveLength(0);
     });
