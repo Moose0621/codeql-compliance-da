@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ComplianceReportGenerator } from '@/lib/export-utils';
-import type { Repository, ExecutiveSummaryReport, TechnicalDetailReport } from '@/types/dashboard';
+import type { Repository } from '@/types/dashboard';
 
 function createMockRepo(name: string, findings: { critical: number; high: number; medium: number; low: number; note: number; total: number }, scanDate?: string): Repository {
   return {

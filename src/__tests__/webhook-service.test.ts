@@ -15,7 +15,7 @@ Object.defineProperty(global, 'crypto', {
 
 // Mock EventSource
 const mockEventSourceInstances: any[] = [];
-const mockEventSource = vi.fn().mockImplementation((url, options) => {
+const mockEventSource = vi.fn().mockImplementation((url, _options) => {
   const instance = {
     url,
     readyState: 1, // Start as OPEN

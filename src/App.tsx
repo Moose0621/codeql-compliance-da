@@ -18,19 +18,21 @@ import { GitHubConnection } from "@/components/GitHubConnection";
 import { RealtimeNotifications } from "@/components/RealtimeNotifications";
 import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { FilterPresets } from "@/components/FilterPresets";
-import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
+import { Shield, ArrowClockwise, Activity, FileText, Warning, Table, Code, GitBranch, CheckCircle, Bell } from "@phosphor-icons/react";
 import { toast } from "sonner";
 // Replaced Spark KV with localStorage persistence
 import { usePersistentConfig } from '@/hooks/usePersistentConfig';
+import { useNotifications } from '@/hooks/useNotifications';
 import { useRealTimeUpdates } from '@/hooks/useRealTimeUpdates';
 import { useAdvancedSearch } from '@/hooks/useAdvancedSearch';
 import { getEnvConfig } from '@/lib/env-config';
 import { createGitHubService } from '@/lib/github-service';
+import { notificationService } from '@/lib/notification-service';
 import type { Repository, ScanRequest, ExportFormat, ComplianceReport } from "@/types/dashboard";
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { RepositoryDetailsDialog } from '@/components/RepositoryDetailsDialog';
-import { Input } from '@/components/ui/input';
-import { Toggle } from '@/components/ui/toggle';
+import { NotificationCenter } from '@/components/NotificationCenter';
+import { NotificationPreferences } from '@/components/NotificationPreferences';
 
 interface GitHubConfig {
   token: string;
@@ -64,8 +66,11 @@ function App() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 30;
 
+  // Notification system hook
+  const { unreadCount, hasUnread } = useNotifications();
+
   // Real-time updates hook for webhook integration
-  const { isConnected: isWebhookConnected } = useRealTimeUpdates({
+  useRealTimeUpdates({
     autoConnect: githubConfig?.isConnected ?? false,
     showToastNotifications: true,
     onRepositoryUpdate: (repositoryId, status, findings) => {
@@ -229,8 +234,8 @@ function App() {
 
       toast.success(`CodeQL scan dispatched for ${repository.name}`);
 
-      // Real-time updates will handle completion notification
-      // No more polling needed - webhook integration will update status automatically
+      // Real-time updates will handle completion notification via webhooks
+      // Webhook integration will automatically trigger notifications when scans complete
 
     } catch (error) {
       console.error('Failed to dispatch scan:', error);
@@ -267,6 +272,11 @@ function App() {
         last_scan_status: analysis.latestAnalysis ? 'success' : r.last_scan_status
       } : r));
       toast.success(`Refreshed results for ${repository.name}`);
+      
+      // Create security alert notification for refreshed findings if there are any
+      if (findings.total > 0) {
+        await notificationService.createSecurityAlert(repository, findings);
+      }
     } catch (e) {
       console.warn('Refresh failed', e);
       toast.error(`Failed to refresh ${repository.name}`);
@@ -346,7 +356,7 @@ function App() {
               <>
                 <RealtimeNotifications 
                   autoConnect={true}
-                  onRepositoryUpdate={(repositoryId, status, findings) => {
+                  onRepositoryUpdate={(_repositoryId, _status, _findings) => {
                     // This is handled by the main useRealTimeUpdates hook above
                     // but we can add additional UI-specific handling here
                   }}
@@ -430,12 +440,21 @@ function App() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="setup">Setup</TabsTrigger>
             <TabsTrigger value="repositories" disabled={!githubConfig?.isConnected}>Repositories</TabsTrigger>
             <TabsTrigger value="analytics" disabled={!githubConfig?.isConnected}>Security Analytics</TabsTrigger>
             <TabsTrigger value="audit" disabled={!githubConfig?.isConnected}>Audit Trail</TabsTrigger>
             <TabsTrigger value="exports" disabled={!githubConfig?.isConnected}>Export History</TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell size={16} />
+              Notifications
+              {hasUnread && (
+                <Badge variant="destructive" className="ml-1 h-4 min-w-4 text-xs">
+                  {unreadCount}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="setup" className="space-y-6">
@@ -603,6 +622,20 @@ function App() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Main Notification Center */}
+              <div className="lg:col-span-2">
+                <NotificationCenter maxHeight="600px" />
+              </div>
+              
+              {/* Notification Preferences Sidebar */}
+              <div>
+                <NotificationPreferences />
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
