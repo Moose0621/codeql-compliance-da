@@ -223,7 +223,7 @@ export function GitHubConnection({ onConnectionChange }: GitHubConnectionProps) 
       toast.success("Permission check completed");
       return newPermissionStatus;
 
-    } catch (error) {
+    } catch {
       toast.error("Failed to check permissions");
     }
   };
