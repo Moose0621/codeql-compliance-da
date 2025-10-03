@@ -7,7 +7,7 @@ interface SecurityChartProps {
   title?: string;
 }
 
-export function SecurityChart({ findings, title = "Security Findings Overview" }: SecurityChartProps) {
+export function SecurityChart({ findings }: SecurityChartProps) {
   const aggregateFindings = findings.reduce((acc, finding) => ({
     critical: acc.critical + finding.critical,
     high: acc.high + finding.high,
