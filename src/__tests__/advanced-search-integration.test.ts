@@ -62,7 +62,22 @@ global.URLSearchParams = class MockURLSearchParams {
     });
     return pairs.join('&');
   }
-};
+
+  // Add missing URLSearchParams methods to satisfy TypeScript
+  has(_key: string): boolean { return false; }
+  append(_key: string, _value: string): void { }
+  delete(_key: string): void { }
+  getAll(_key: string): string[] { return []; }
+  forEach(callback: (value: string, key: string) => void): void {
+    this.params.forEach(callback);
+  }
+  keys(): IterableIterator<string> { return this.params.keys(); }
+  values(): IterableIterator<string> { return this.params.values(); }
+  entries(): IterableIterator<[string, string]> { return this.params.entries(); }
+  [Symbol.iterator](): IterableIterator<[string, string]> { return this.params.entries(); }
+  sort(): void { }
+  get size(): number { return this.params.size; }
+} as any;
 
 describe('Advanced Search Integration Tests', () => {
   const mockRepositories: Repository[] = [

@@ -212,7 +212,7 @@ describe('Filter Presets - Advanced Search System', () => {
     }
 
     // Apply compliance score range
-    if (filters.advanced.complianceScoreRange) {
+    if (filters.advanced?.complianceScoreRange) {
       const [min, max] = filters.advanced.complianceScoreRange;
       filtered = filtered.filter(repo => {
         const score = repo.compliance_score ?? 0;
@@ -221,18 +221,18 @@ describe('Filter Presets - Advanced Search System', () => {
     }
 
     // Apply language filter
-    if (filters.advanced.languages?.length) {
+    if (filters.advanced?.languages?.length) {
       filtered = filtered.filter(repo =>
-        repo.languages && filters.advanced.languages!.some(lang =>
+        repo.languages && filters.advanced!.languages!.some(lang =>
           repo.languages!.includes(lang)
         )
       );
     }
 
     // Apply topic filter
-    if (filters.advanced.topics?.length) {
+    if (filters.advanced?.topics?.length) {
       filtered = filtered.filter(repo =>
-        repo.topics && filters.advanced.topics!.some(topic =>
+        repo.topics && filters.advanced!.topics!.some(topic =>
           repo.topics!.includes(topic)
         )
       );
