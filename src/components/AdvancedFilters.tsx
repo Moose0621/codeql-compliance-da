@@ -96,7 +96,7 @@ export function AdvancedFilters({
   );
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-6" data-testid="advanced-filters">
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -104,7 +104,7 @@ export function AdvancedFilters({
             Advanced Filters
           </CardTitle>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm text-muted-foreground" data-testid="results-count">
               Showing {resultsCount} of {totalCount}
             </span>
             {onGetShareableURL && hasActiveFilters && (
@@ -167,6 +167,7 @@ export function AdvancedFilters({
               onPressedChange={handleResultsOnlyToggle}
               aria-label="Show only repositories with security findings"
               size="sm"
+              data-testid="results-only-toggle"
             >
               <Shield size={14} className="mr-1" />
               With Findings
@@ -174,7 +175,7 @@ export function AdvancedFilters({
           </div>
 
           {/* Severity Filter */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" data-testid="severity-filters">
             <span className="text-sm">Severity:</span>
             {['critical', 'high', 'medium', 'low', 'note', 'none'].map((severity) => (
               <Badge
@@ -182,6 +183,8 @@ export function AdvancedFilters({
                 variant={severityFilter === severity ? "default" : "outline"}
                 className="cursor-pointer select-none text-xs"
                 onClick={() => handleSeverityChange(severityFilter === severity ? null : severity)}
+                data-testid={`severity-badge-${severity}`}
+                data-selected={severityFilter === severity}
               >
                 {severity}
               </Badge>
@@ -199,7 +202,7 @@ export function AdvancedFilters({
               <Code size={14} />
               Languages
             </label>
-            <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2">
+            <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2" data-testid="language-filter">
               {availableOptions.languages.slice(0, 20).map((language) => {
                 const isSelected = advanced.languages?.includes(language) || false;
                 return (
@@ -239,7 +242,7 @@ export function AdvancedFilters({
               <Tag size={14} />
               Topics
             </label>
-            <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2">
+            <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2" data-testid="topic-filter">
               {availableOptions.topics.slice(0, 20).map((topic) => {
                 const isSelected = advanced.topics?.includes(topic) || false;
                 return (
@@ -322,7 +325,7 @@ export function AdvancedFilters({
           </div>
 
           {/* Compliance Score Range */}
-          <div className="space-y-3 md:col-span-2">
+          <div className="space-y-3 md:col-span-2" data-testid="compliance-score-section">
             <label className="text-sm font-medium flex items-center gap-1">
               <Shield size={14} />
               Compliance Score Range
@@ -335,6 +338,7 @@ export function AdvancedFilters({
                 min={0}
                 step={5}
                 className="w-full"
+                data-testid="compliance-score-slider"
               />
               <div className="flex justify-between text-xs text-muted-foreground mt-1">
                 <span>{advanced.complianceScoreRange?.[0] || 0}</span>
@@ -348,7 +352,7 @@ export function AdvancedFilters({
         {hasActiveFilters && (
           <>
             <Separator />
-            <div className="space-y-2">
+            <div className="space-y-2" data-testid="active-filters">
               <h4 className="text-sm font-medium">Active Filters</h4>
               <div className="flex flex-wrap gap-2">
                 {search.trim() && (
